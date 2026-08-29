@@ -108,10 +108,6 @@ export function applyMove(state: GameState, seat: number, action: Action): GameS
     players[seat]!.passed = true;
   } else {
     players[seat]!.hand = removeCards(players[seat]!.hand, action.cards);
-    // A fresh play reopens the trick: everyone else may respond again.
-    for (let i = 0; i < 4; i++) {
-      if (i !== seat) players[i]!.passed = false;
-    }
     if (players[seat]!.hand.length === 0) {
       players[seat]!.out = true;
       next.finished.push(seat);
