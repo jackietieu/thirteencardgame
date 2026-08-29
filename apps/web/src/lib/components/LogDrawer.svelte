@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { describeMove } from '@thirteen/engine';
-	import { game, type LogEntry } from '$lib/game.svelte';
+	import type { LogEntry } from '$lib/driver';
 
 	interface Props {
 		log: LogEntry[];
+		names: string[];
 	}
 
-	let { log }: Props = $props();
+	let { log, names }: Props = $props();
 
 	let open = $state(false);
 
@@ -26,7 +27,7 @@
 		{#each entries as entry, i (log.length - i)}
 			<li>
 				<span class="text-emerald-400/80">H{entry.handNumber + 1}</span>
-				<span class="font-semibold">{game.seatNames[entry.seat]}</span>
+				<span class="font-semibold">{names[entry.seat]}</span>
 				— {describeMove(entry.action)}
 			</li>
 		{/each}

@@ -12,11 +12,19 @@ export default defineConfig({
 		baseURL: 'http://localhost:4173',
 		trace: 'on-first-retry'
 	},
-	webServer: {
-		command: 'pnpm exec vite dev --port 4173 --strictPort',
-		url: 'http://localhost:4173',
-		reuseExistingServer: !process.env.CI,
-		timeout: 60_000
-	},
+	webServer: [
+		{
+			command: 'pnpm --filter @thirteen/server start',
+			url: 'http://localhost:8787',
+			reuseExistingServer: !process.env.CI,
+			timeout: 60_000
+		},
+		{
+			command: 'pnpm exec vite dev --port 4173 --strictPort',
+			url: 'http://localhost:4173',
+			reuseExistingServer: !process.env.CI,
+			timeout: 60_000
+		}
+	],
 	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
 });

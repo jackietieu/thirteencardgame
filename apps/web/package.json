@@ -14,6 +14,7 @@
   "dependencies": {
     "@thirteen/bots": "workspace:*",
     "@thirteen/engine": "workspace:*",
+    "@thirteen/protocol": "workspace:*",
     "marked": "18.0.11"
   },
   "devDependencies": {

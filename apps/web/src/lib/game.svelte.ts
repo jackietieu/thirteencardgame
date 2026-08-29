@@ -14,11 +14,9 @@ import {
 	type GameState,
 	type Move
 } from '@thirteen/engine';
-export interface LogEntry {
-	seat: number;
-	action: Action;
-	handNumber: number;
-}
+import type { LogEntry } from '$lib/driver';
+
+export type { LogEntry };
 
 export const BOT_NAME_POOL = [
 	// 25% Vietnamese, 75% American names.
