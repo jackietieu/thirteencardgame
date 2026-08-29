@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.svelte-kit/
+coverage/
+*.log
+.DS_Store
+vite.config.ts.timestamp-*
+test-results/
+playwright-report/
+blob-report/

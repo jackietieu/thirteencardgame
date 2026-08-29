@@ -1,0 +1,15 @@
+{
+  "name": "thirteencardgame",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "test": "pnpm -r test",
+    "check": "pnpm --filter web check",
+    "e2e": "pnpm --filter web test:e2e"
+  }
+}
