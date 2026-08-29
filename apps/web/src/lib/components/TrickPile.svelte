@@ -35,7 +35,7 @@
 
 <div
 	data-testid="trick-pile"
-	class="grid min-h-64 w-full grid-cols-[1fr_auto_1fr] grid-rows-[1fr_auto_1fr] items-center justify-items-center gap-1 rounded-2xl border border-emerald-800/50 bg-emerald-950/40 p-3"
+	class="grid min-h-48 w-full grid-cols-[1fr_auto_1fr] grid-rows-[1fr_auto_1fr] items-center justify-items-center gap-1 rounded-2xl border border-emerald-800/50 bg-emerald-950/40 p-3 sm:min-h-64"
 >
 	{#if trick.plays.length === 0}
 		<div class="col-start-2 row-start-2 flex flex-col items-center gap-2">

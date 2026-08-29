@@ -59,89 +59,25 @@ body {
 	animation: shake 0.35s ease;
 }
 
-/* One-by-one dealing animation: card backs fly from the table center to each seat. */
+/* One-by-one dealing animation: card backs fly from the table center to each
+   card's real destination — seat hands for bots, hand slots for the human.
+   Targets are measured at deal start and passed as --dx/--dy pixel offsets. */
 .deal-card {
 	position: absolute;
 	left: 50%;
 	top: 50%;
 	opacity: 0;
-
-}
-.deal-bottom {
-	animation: deal-to-bottom 0.4s ease-out forwards;
-}
-.deal-left {
-	animation: deal-to-left 0.4s ease-out forwards;
-}
-.deal-top {
-	animation: deal-to-top 0.4s ease-out forwards;
-}
-.deal-right {
-	animation: deal-to-right 0.4s ease-out forwards;
+	animation: deal-to-target 0.4s ease-out forwards;
 }
 
-@keyframes deal-to-bottom {
+@keyframes deal-to-target {
 	from {
 		opacity: 1;
-		transform: translate(-50%, -50%) rotate(-10deg);
+		transform: translate(-50%, -50%) rotate(-8deg);
 	}
 	to {
 		opacity: 1;
-		transform: translate(-50%, calc(-50% + 9rem)) rotate(3deg);
-	}
-}
-
-@keyframes deal-to-top {
-	from {
-		opacity: 1;
-		transform: translate(-50%, -50%) rotate(10deg);
-	}
-	to {
-		opacity: 1;
-		transform: translate(-50%, calc(-50% - 9rem)) rotate(-3deg);
-	}
-}
-
-@keyframes deal-to-left {
-	from {
-		opacity: 1;
-		transform: translate(-50%, -50%) rotate(-6deg);
-	}
-	to {
-		opacity: 1;
-		transform: translate(calc(-50% - 11rem), -50%) rotate(-12deg);
-	}
-}
-
-@keyframes deal-to-right {
-	from {
-		opacity: 1;
-		transform: translate(-50%, -50%) rotate(6deg);
-	}
-	to {
-		opacity: 1;
-		transform: translate(calc(-50% + 11rem), -50%) rotate(12deg);
-	}
-}
-
-
-/* Deal animation for the human player: cards fly to their final hand positions. */
-.deal-hand {
-	animation: deal-to-hand 0.4s ease-out forwards;
-}
-
-@keyframes deal-to-hand {
-	from {
-		opacity: 1;
-		left: 50%;
-		top: 50%;
-		transform: translate(-50%, -50%) rotate(0deg);
-	}
-	to {
-		opacity: 1;
-		left: var(--tx);
-		top: var(--ty);
-		transform: translate(-50%, -50%) rotate(0deg);
+		transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) rotate(0deg);
 	}
 }
 @media (prefers-reduced-motion: reduce) {
@@ -194,4 +130,41 @@ body {
 	border-radius: 0.3rem;
 	padding: 0.1rem 0.35rem;
 	font-size: 0.85em;
+}
+
+/* Landscape prompt: shown on portrait-orientation phones. */
+.rotate-overlay {
+	display: none;
+}
+
+@media (orientation: portrait) and (max-width: 920px) {
+	.rotate-overlay {
+		display: flex;
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+		background: #064e3b;
+		color: #f0fdf4;
+		text-align: center;
+		padding: 2rem;
+		font-size: 1.05rem;
+		font-weight: 600;
+	}
+}
+
+.rotate-icon {
+	width: 3rem;
+	height: 3rem;
+}
+
+/* Mobile: avoid double-tap zoom delays on cards and buttons. */
+button,
+.play-card,
+.card-back {
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
 }

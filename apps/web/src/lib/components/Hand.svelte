@@ -15,7 +15,10 @@
 	let { cards, selected, onToggle, myTurn, highlighted, disabled }: Props = $props();
 </script>
 
-<div data-hand class="flex flex-wrap items-end justify-center gap-1 sm:gap-1.5 md:gap-2">
+<div
+	data-hand
+	class="flex flex-nowrap items-end justify-start gap-1 overflow-x-auto w-full pb-2 sm:flex-wrap sm:justify-center sm:overflow-x-visible sm:gap-1.5 md:gap-2"
+>
 	{#each cards as card (cardKey(card))}
 		<Card
 			{card}
