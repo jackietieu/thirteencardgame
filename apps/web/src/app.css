@@ -3,3 +3,109 @@
 body {
 	@apply bg-emerald-950 text-neutral-100 antialiased;
 }
+
+/* Opponent card backs — CSS pattern, no image assets. */
+.card-back {
+	display: inline-block;
+	width: 1.6rem;
+	height: 2.3rem;
+	border-radius: 0.3rem;
+	border: 1px solid rgb(255 255 255 / 0.25);
+	background-color: #1e3a5f;
+	background-image: repeating-linear-gradient(
+		45deg,
+		rgb(255 255 255 / 0.12) 0 2px,
+		transparent 2px 6px
+	);
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+/* Compact card label used in the trick pile and last-trick summary. */
+.mini-card {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.1rem;
+	height: 2.95rem;
+	border-radius: 0.35rem;
+	border: 1px solid rgb(0 0 0 / 0.15);
+	background: white;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+	font-size: 0.7rem;
+	font-weight: 700;
+}
+
+/* Rejected-play shake. Retriggered by remounting via {#key}. */
+@keyframes shake {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	20% {
+		transform: translateX(-0.4rem);
+	}
+	40% {
+		transform: translateX(0.4rem);
+	}
+	60% {
+		transform: translateX(-0.25rem);
+	}
+	80% {
+		transform: translateX(0.25rem);
+	}
+}
+
+.shake {
+	animation: shake 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* /rules page prose styling (Tailwind typography plugin not installed). */
+.rules {
+	max-width: 46rem;
+	margin-inline: auto;
+	line-height: 1.7;
+	font-size: 0.95rem;
+	color: rgb(231 245 255 / 0.92);
+}
+.rules h1 {
+	font-size: 1.9rem;
+	font-weight: 700;
+	margin: 1.5rem 0 1rem;
+	color: white;
+}
+.rules h2 {
+	font-size: 1.35rem;
+	font-weight: 700;
+	margin: 2rem 0 0.75rem;
+	color: rgb(167 243 208);
+}
+.rules p {
+	margin: 0.75rem 0;
+}
+.rules ul {
+	margin: 0.75rem 0;
+	padding-left: 1.4rem;
+	list-style: disc;
+}
+.rules li {
+	margin: 0.35rem 0;
+}
+.rules strong {
+	color: white;
+}
+.rules code {
+	background: rgb(0 0 0 / 0.35);
+	border-radius: 0.3rem;
+	padding: 0.1rem 0.35rem;
+	font-size: 0.85em;
+}
