@@ -105,6 +105,47 @@
 
 	const dealInterval = $derived(game.fast ? DEAL_INTERVAL_FAST_MS : DEAL_INTERVAL_MS);
 
+	let tableEl: HTMLDivElement | undefined = $state();
+	let handAreaEl: HTMLDivElement | undefined = $state();
+	let dealTargets = $state<{ dx: number; dy: number }[]>([]);
+
+	// Measure real destinations when a deal starts: bots' cards fly to their seat
+	// hand; the human's cards fly to their exact final hand slot positions.
+	$effect(() => {
+		if (!game.dealing) {
+			if (dealTargets.length > 0) dealTargets = [];
+			return;
+		}
+		if (dealTargets.length === 52 || !tableEl) return;
+		const w = tableEl.getBoundingClientRect();
+		const cx = w.left + w.width / 2;
+		const cy = w.top + w.height / 2;
+		const targets: { dx: number; dy: number }[] = [];
+		for (let i = 0; i < 52; i++) {
+			const seat = i % 4;
+			if (seat === 0) {
+				const hr = handAreaEl?.getBoundingClientRect();
+				if (hr && hr.width > 0) {
+					const j = i / 4;
+					const tx = hr.left + ((j + 0.5) * hr.width) / 13;
+					const ty = hr.top + hr.height / 2;
+					targets.push({ dx: tx - cx, dy: ty - cy });
+				} else {
+					targets.push({ dx: 0, dy: w.height / 2 - 30 });
+				}
+			} else {
+				const el = document.querySelector(`[data-seat="${CSS.escape(game.seatNames[seat])}"]`);
+				if (el) {
+					const r = el.getBoundingClientRect();
+					targets.push({ dx: r.left + r.width / 2 - cx, dy: r.top + r.height / 2 - cy });
+				} else {
+					targets.push({ dx: 0, dy: -w.height / 3 });
+				}
+			}
+		}
+		dealTargets = targets;
+	});
+
 	function toggleCard(card: Card) {
 		const key = cardKey(card);
 		const next = new Set(selected);
@@ -199,7 +240,7 @@
 			</section>
 		{/if}
 
-		<div class="relative flex flex-col items-center gap-3">
+		<div class="relative flex flex-col items-center gap-3" bind:this={tableEl}>
 			<Seat
 				name={game.seatNames[2]}
 				position="top"
@@ -246,8 +287,9 @@
 					</button>
 				</div>
 			{:else if game.state.phase === 'playing'}
-				<div class={game.dealing ? 'invisible' : ''}>
-					<ActionBar
+				<div class={game.dealing ? 'invisible' : ''} bind:this={handAreaEl}>
+					<div class="mb-8">
+						<ActionBar
 						canPlay={canPlay}
 						canPass={canPass}
 						{reason}
@@ -256,7 +298,8 @@
 						onPass={onPass}
 						onToggleAutoPass={(value) => (game.autoPass = value)}
 						shakeKey={game.shake}
-					/>
+						/>
+					</div>
 
 					<Hand
 						cards={hand}
@@ -277,24 +320,16 @@
 
 			<LogDrawer log={game.log} />
 
-			{#if game.dealing}
+			{#if game.dealing && dealTargets.length === 52}
 				<div class="pointer-events-none absolute inset-0 z-20" aria-hidden="true">
 					<p class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-emerald-300">
 						Dealing… {game.dealProgress}/52
 					</p>
-					{#each Array(52) as _, i (i)}
-						{#if i % 4 === 0}
-							{@const j = i / 4}
-							<span
-								class="deal-card card-back deal-hand"
-								style="--tx: {50 + (j - 6) * 5.5}%; --ty: calc(100% - 2.5rem); animation-delay: {i * dealInterval}ms"
-							></span>
-						{:else}
-							<span
-								class="deal-card card-back deal-{['left', 'top', 'right'][i % 4 - 1]}"
-								style="animation-delay: {i * dealInterval}ms"
-							></span>
-						{/if}
+					{#each dealTargets as target, i (i)}
+						<span
+							class="deal-card card-back"
+							style="--dx: {target.dx}px; --dy: {target.dy}px; animation-delay: {i * dealInterval}ms"
+						></span>
 					{/each}
 				</div>
 			{/if}
@@ -302,4 +337,8 @@
 	{:else}
 		<p class="py-16 text-center text-emerald-300">Dealing…</p>
 	{/if}
+	<div class="rotate-overlay" aria-hidden="true">
+		<svg viewBox="0 0 24 24" class="rotate-icon"><path d="M17 1H7c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14z" fill="currentColor" /></svg>
+		<p>Please rotate your device to landscape to play.</p>
+	</div>
 </main>
