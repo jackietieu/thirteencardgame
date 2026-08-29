@@ -236,7 +236,6 @@
 
 			{#if game.dealingPending}
 				<div class="flex flex-col items-center gap-2 py-6" data-testid="deal-panel">
-					<p class="text-sm text-emerald-200">52 cards ready — deal them out one by one.</p>
 					<button
 						type="button"
 						data-testid="deal-button"
@@ -246,30 +245,28 @@
 						Deal cards
 					</button>
 				</div>
-			{:else if game.dealing}
-				<p class="py-6 text-center text-sm text-emerald-300" data-testid="dealing-status">
-					Dealing… {game.dealProgress}/52
-				</p>
 			{:else if game.state.phase === 'playing'}
-				<ActionBar
-					canPlay={canPlay}
-					canPass={canPass}
-					{reason}
-					autoPass={game.autoPass}
-					onPlay={onPlay}
-					onPass={onPass}
-					onToggleAutoPass={(value) => (game.autoPass = value)}
-					shakeKey={game.shake}
-				/>
+				<div class={game.dealing ? 'invisible' : ''}>
+					<ActionBar
+						canPlay={canPlay}
+						canPass={canPass}
+						{reason}
+						autoPass={game.autoPass}
+						onPlay={onPlay}
+						onPass={onPass}
+						onToggleAutoPass={(value) => (game.autoPass = value)}
+						shakeKey={game.shake}
+					/>
 
-				<Hand
-					cards={hand}
-					selected={selected}
-					onToggle={toggleCard}
-					myTurn={game.myTurn}
-					highlighted={highlighted}
-					disabled={!game.myTurn}
-				/>
+					<Hand
+						cards={hand}
+						selected={selected}
+						onToggle={toggleCard}
+						myTurn={game.myTurn}
+						highlighted={highlighted}
+						disabled={!game.myTurn}
+					/>
+				</div>
 			{:else}
 				<p class="py-4 text-center text-sm text-emerald-200">
 					{game.state.phase === 'handOver'
@@ -282,11 +279,22 @@
 
 			{#if game.dealing}
 				<div class="pointer-events-none absolute inset-0 z-20" aria-hidden="true">
+					<p class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-emerald-300">
+						Dealing… {game.dealProgress}/52
+					</p>
 					{#each Array(52) as _, i (i)}
-						<span
-							class="deal-card card-back deal-{['bottom', 'left', 'top', 'right'][i % 4]}"
-							style="animation-delay: {i * dealInterval}ms"
-						></span>
+						{#if i % 4 === 0}
+							{@const j = i / 4}
+							<span
+								class="deal-card card-back deal-hand"
+								style="--tx: {50 + (j - 6) * 5.5}%; --ty: calc(100% - 2.5rem); animation-delay: {i * dealInterval}ms"
+							></span>
+						{:else}
+							<span
+								class="deal-card card-back deal-{['left', 'top', 'right'][i % 4 - 1]}"
+								style="animation-delay: {i * dealInterval}ms"
+							></span>
+						{/if}
 					{/each}
 				</div>
 			{/if}
