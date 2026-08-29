@@ -1,15 +1,13 @@
 <script lang="ts">
 	import { cardLabel, describeMove, type Card, type Trick, type TrickPlay } from '@thirteen/engine';
-	import { game } from '$lib/game.svelte';
-
 	interface Props {
 		trick: Trick;
 		lastTrick: Trick | null;
+		names: string[];
 	}
 
-	let { trick, lastTrick }: Props = $props();
+	let { trick, lastTrick, names }: Props = $props();
 
-	/** Grid slot per seat: 0 bottom, 1 left, 2 top, 3 right — plus-sign around the center. */
 	const SLOT_CLASS: Record<number, string> = {
 		0: 'col-start-2 row-start-3',
 		1: 'col-start-1 row-start-2',
@@ -40,7 +38,7 @@
 	{#if trick.plays.length === 0}
 		<div class="col-start-2 row-start-2 flex flex-col items-center gap-2">
 			<p class="text-sm text-emerald-300/70">
-				{lastTrick ? 'New trick' : 'Opening lead'} — {game.seatNames[trick.leader]} leads
+				{lastTrick ? 'New trick' : 'Opening lead'} — {names[trick.leader]} leads
 			</p>
 			{#if lastTrick && lastTrick.plays.length > 0}
 				{@const winner = lastTrick.leader}
@@ -50,7 +48,7 @@
 					class="flex flex-col items-center gap-1 rounded-xl border border-emerald-800/40 bg-emerald-900/30 px-3 py-2"
 				>
 					<span class="text-xs text-emerald-300/80">
-						Last trick — {game.seatNames[winner]} won with
+						Last trick — {names[winner]} won with
 						{winnerPlay ? describeMove(winnerPlay.action) : 'pass'}
 					</span>
 					<div class="flex">
@@ -75,7 +73,7 @@
 					data-testid={`trick-play-${seat}`}
 					class="flex flex-col items-center gap-1 {SLOT_CLASS[seat]}"
 				>
-					<span class="text-xs font-semibold text-emerald-200">{game.seatNames[seat]}</span>
+					<span class="text-xs font-semibold text-emerald-200">{names[seat]}</span>
 					{#if play.action.type === 'pass'}
 						<span
 							class="rounded-lg border border-emerald-800/60 px-2 py-1 text-xs text-emerald-400/80 italic"

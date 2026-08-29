@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { currentRequirement, describeMove, type GameState } from '@thirteen/engine';
-	import { game } from '$lib/game.svelte';
 
 	interface Props {
 		state: GameState;
+		names: string[];
 	}
 
-	let { state }: Props = $props();
+	let { state, names }: Props = $props();
 
 	const requirement = $derived(state.phase === 'playing' ? currentRequirement(state) : null);
 	const yourTurn = $derived(state.phase === 'playing' && state.turn === 0);
@@ -29,7 +29,7 @@
 				Your turn — lead any combination
 			{/if}
 		{:else if state.turn >= 0}
-			Waiting for {game.seatNames[state.turn]}…
+			Waiting for {names[state.turn]}…
 		{/if}
 	</div>
 {/if}

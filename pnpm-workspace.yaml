@@ -1,5 +1,7 @@
 packages:
   - packages/*
   - apps/*
+allowBuilds:
+  esbuild: false
 minimumReleaseAgeExclude:
   - svelte@5.57.0
