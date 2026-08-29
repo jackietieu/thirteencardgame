@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { describeMove } from '@thirteen/engine';
-	import { SEAT_NAMES, type LogEntry } from '$lib/game.svelte';
+	import { game, type LogEntry } from '$lib/game.svelte';
 
 	interface Props {
 		log: LogEntry[];
@@ -26,7 +26,7 @@
 		{#each entries as entry, i (log.length - i)}
 			<li>
 				<span class="text-emerald-400/80">H{entry.handNumber + 1}</span>
-				<span class="font-semibold">{SEAT_NAMES[entry.seat]}</span>
+				<span class="font-semibold">{game.seatNames[entry.seat]}</span>
 				— {describeMove(entry.action)}
 			</li>
 		{/each}

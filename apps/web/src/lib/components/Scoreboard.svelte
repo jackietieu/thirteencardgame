@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { Phase } from '@thirteen/engine';
-	import { SEAT_NAMES } from '$lib/game.svelte';
 
 	interface Props {
 		scores: number[];
+		names: string[];
 		finished: number[];
 		handNumber: number;
 		phase: Phase;
@@ -11,13 +11,13 @@
 		onNextHand: () => void;
 	}
 
-	let { scores, finished, handNumber, phase, winner, onNextHand }: Props = $props();
+	let { scores, finished, handNumber, phase, winner, names, onNextHand }: Props = $props();
 </script>
 
 <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-emerald-900/60 px-4 py-2">
 	<div class="flex items-center gap-3 text-sm" data-testid="scoreboard">
 		<span class="font-semibold text-emerald-100">Hand {handNumber + 1}</span>
-		{#each SEAT_NAMES as name, seat (name)}
+		{#each names as name, seat (name)}
 			<span
 				class="rounded-full px-2 py-0.5
 					{finished.includes(seat) ? 'bg-emerald-700/70 text-emerald-100' : 'bg-emerald-950/60 text-emerald-300'}"
@@ -30,7 +30,7 @@
 	{#if phase === 'gameOver'}
 		<div data-testid="game-over" class="flex items-center gap-3">
 			<span class="text-lg font-bold text-amber-300">
-				Game over — {SEAT_NAMES[winner ?? 0]} wins!
+				Game over — {names[winner ?? 0]} wins!
 			</span>
 			<button
 				type="button"

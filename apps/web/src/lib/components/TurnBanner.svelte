@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { currentRequirement, describeMove, type GameState } from '@thirteen/engine';
-	import { SEAT_NAMES } from '$lib/game.svelte';
+	import { game } from '$lib/game.svelte';
 
 	interface Props {
 		state: GameState;
@@ -29,7 +29,7 @@
 				Your turn — lead any combination
 			{/if}
 		{:else if state.turn >= 0}
-			Waiting for {SEAT_NAMES[state.turn]}…
+			Waiting for {game.seatNames[state.turn]}…
 		{/if}
 	</div>
 {/if}

@@ -59,11 +59,78 @@ body {
 	animation: shake 0.35s ease;
 }
 
+/* One-by-one dealing animation: card backs fly from the table center to each seat. */
+.deal-card {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	margin: -1.15rem 0 0 -0.8rem;
+	opacity: 0;
+}
+
+.deal-bottom {
+	animation: deal-to-bottom 0.4s ease-out forwards;
+}
+.deal-left {
+	animation: deal-to-left 0.4s ease-out forwards;
+}
+.deal-top {
+	animation: deal-to-top 0.4s ease-out forwards;
+}
+.deal-right {
+	animation: deal-to-right 0.4s ease-out forwards;
+}
+
+@keyframes deal-to-bottom {
+	from {
+		opacity: 1;
+		transform: translate(-50%, -50%) rotate(-10deg);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, calc(-50% + 9rem)) rotate(3deg);
+	}
+}
+
+@keyframes deal-to-top {
+	from {
+		opacity: 1;
+		transform: translate(-50%, -50%) rotate(10deg);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, calc(-50% - 9rem)) rotate(-3deg);
+	}
+}
+
+@keyframes deal-to-left {
+	from {
+		opacity: 1;
+		transform: translate(-50%, -50%) rotate(-6deg);
+	}
+	to {
+		opacity: 1;
+		transform: translate(calc(-50% - 11rem), -50%) rotate(-12deg);
+	}
+}
+
+@keyframes deal-to-right {
+	from {
+		opacity: 1;
+		transform: translate(-50%, -50%) rotate(6deg);
+	}
+	to {
+		opacity: 1;
+		transform: translate(calc(-50% + 11rem), -50%) rotate(12deg);
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
 	*::after {
 		animation-duration: 0.01ms !important;
+		animation-delay: 0s !important;
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}

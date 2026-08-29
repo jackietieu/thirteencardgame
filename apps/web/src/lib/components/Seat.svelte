@@ -10,7 +10,7 @@
 
 	let { name, position = 'left', cardCount, isTurn, passed, out }: Props = $props();
 
-	const shownBacks = $derived(Math.min(cardCount, 5));
+	const shownBacks = $derived(Math.min(cardCount, 13));
 </script>
 
 <div
@@ -22,7 +22,7 @@
 >
 	<div class="flex" aria-hidden="true">
 		{#each Array(shownBacks) as _, i (i)}
-			<span class="card-back {i > 0 ? '-ml-4' : ''}"></span>
+			<span class="card-back {i > 0 ? '-ml-5' : ''}"></span>
 		{/each}
 	</div>
 	<div class="min-w-20">
