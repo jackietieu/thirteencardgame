@@ -10,8 +10,7 @@
 </svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-3xl px-4 py-8">
-	<header class="mb-6 flex items-center justify-between">
-		<a href="/" class="text-sm text-emerald-300 underline-offset-2 hover:underline">← Home</a>
+	<header class="mb-6 flex justify-end">
 		<a href="/play" class="text-sm text-emerald-300 underline-offset-2 hover:underline">Play →</a>
 	</header>
 	<!-- eslint-disable-next-line svelte/no-at-html-tags — static project doc, no user input -->

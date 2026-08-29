@@ -31,6 +31,7 @@ type Snapshot = {
 	turn: number;
 	moves: number[][];
 	canPass: boolean;
+	dealing: boolean;
 } | null;
 
 function readState(page: Page): Promise<Snapshot> {
@@ -42,7 +43,8 @@ function readState(page: Page): Promise<Snapshot> {
 			phase: state.phase,
 			turn: state.turn,
 			moves: g.engine.legalMoves(state, 0).map((m) => m.cards.map((c) => c.rank * 4 + c.suit)),
-			canPass: g.engine.canPass(state, 0)
+			canPass: g.engine.canPass(state, 0),
+			dealing: !!(g.store.dealing || g.store.dealingPending)
 		};
 	});
 }
@@ -65,12 +67,17 @@ test('full game: deal, play hands vs bots, reach game over with scores', async (
 
 	await page.goto(`/play?fast=1&seed=${seed}`);
 	await page.waitForFunction(() => !!(window as unknown as { __thirteen?: Thirteen }).__thirteen?.store.state);
+	await page.getByTestId('deal-button').click();
 
 	const deadline = Date.now() + 130_000;
 	let finished = false;
 	while (!finished && Date.now() < deadline) {
 		const snap = await readState(page);
 		if (!snap) {
+			await page.waitForTimeout(100);
+			continue;
+		}
+		if (snap.dealing) {
 			await page.waitForTimeout(100);
 			continue;
 		}

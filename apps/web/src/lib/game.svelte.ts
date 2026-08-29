@@ -8,6 +8,7 @@ import {
 	describeMove,
 	legalMoves,
 	nextHand as engineNextHand,
+	rngStep,
 	validateMove,
 	type Action,
 	type GameState,
@@ -20,6 +21,44 @@ export interface LogEntry {
 	handNumber: number;
 }
 
+/** Predetermined bot name pool — seat 0 is always You. */
+export const BOT_NAME_POOL = [
+	'Hùng',
+	'Lan',
+	'Mai',
+	'Tuấn',
+	'Thảo',
+	'Linh',
+	'Bình',
+	'Phúc',
+	'Hạnh',
+	'Dũng',
+	'Ngọc',
+	'Vy',
+	'Cường',
+	'Chi',
+	'Long',
+	'Hoa'
+] as const;
+
+/** Milliseconds between dealt cards in the dealing animation (normal pace). */
+export const DEAL_INTERVAL_MS = 45;
+/** Pace used under ?fast=1 so E2E runs are quick but still ordered. */
+export const DEAL_INTERVAL_FAST_MS = 12;
+
+function pickBotNames(seed: number): string[] {
+	let rng = (seed ^ 0x5f3_759d) >>> 0;
+	const pool = [...BOT_NAME_POOL];
+	const names: string[] = ['You'];
+	for (let i = 0; i < 3; i++) {
+		const step = rngStep(rng);
+		rng = step.state;
+		const index = Math.floor(step.float * pool.length);
+		names.push(pool.splice(index, 1)[0]!);
+	}
+	return names;
+}
+
 class GameStore {
 	state = $state<GameState | null>(null);
 	log = $state<LogEntry[]>([]);
@@ -28,10 +67,19 @@ class GameStore {
 	lastError = $state<string | null>(null);
 	/** Increment to retrigger the shake animation on the action bar. */
 	shake = $state(0);
+	/** Per-game display names; seat 0 is always You. */
+	seatNames = $state<string[]>(['You', 'West', 'North', 'East']);
+	/** Waiting for the Deal button — shown at the start of a new game. */
+	dealingPending = $state(false);
+	/** One-by-one dealing animation in progress. */
+	dealing = $state(false);
+	/** Cards dealt so far in the running animation (0..52). */
+	dealProgress = $state(0);
 
-	/** Plain field: bumping it invalidates pending bot timers after a reset. */
+	/** Plain field: bumping it invalidates pending bot/deal timers after a reset. */
 	private generation = 0;
 	private timer: ReturnType<typeof setTimeout> | undefined;
+	private dealTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/** Read at call time — module eval can run before the router commits the URL. */
 	get fast() {
@@ -48,21 +96,27 @@ class GameStore {
 	myTurn = $derived(this.state?.phase === 'playing' && this.state.turn === 0);
 
 	newGame(seed?: number) {
-		this.cancelTimer();
+		this.cancelTimers();
 		this.generation++;
 		this.state = createGame(seed ?? this.urlSeed ?? undefined);
-		this.log = [];
+		// state.rngState is the seed createGame used, so names follow ?seed too.
+		this.seatNames = pickBotNames(this.state.rngState);
+		this.dealingPending = true;
 		this.lastError = null;
-		this.schedule();
+		this.dealing = false;
+		this.dealProgress = 0;
 	}
 
-	/** Test hook: adopt an externally built state (E2E scenarios). */
+	/** Test hook: adopt an externally built state (E2E scenarios) — skips the deal gate. */
 	loadState(state: GameState) {
-		this.cancelTimer();
+		this.cancelTimers();
 		this.generation++;
 		this.state = state;
 		this.log = [];
 		this.lastError = null;
+		this.dealingPending = false;
+		this.dealing = false;
+		this.dealProgress = 0;
 		this.schedule();
 	}
 
@@ -88,23 +142,51 @@ class GameStore {
 	nextHand() {
 		const state = this.state;
 		if (!state || state.phase !== 'handOver') return;
-		this.cancelTimer();
+		this.cancelTimers();
 		this.generation++;
 		this.state = engineNextHand(state);
 		this.lastError = null;
-		this.schedule();
+		this.dealingPending = true;
+		this.dealProgress = 0;
+		this.startDealing();
 	}
 
-	private cancelTimer() {
+	/** Called by the Deal button: runs the one-by-one dealing animation, then play begins. */
+	startDealing() {
+		if (!this.dealingPending || !this.state) return;
+		this.dealingPending = false;
+		this.dealing = true;
+		this.dealProgress = 0;
+		this.tickDealing(this.generation);
+	}
+
+	private tickDealing(gen: number) {
+		if (gen !== this.generation || !this.dealing) return;
+		if (this.dealProgress >= 52) {
+			this.dealing = false;
+			this.schedule();
+			return;
+		}
+		this.dealProgress++;
+		const pace = this.fast ? DEAL_INTERVAL_FAST_MS : DEAL_INTERVAL_MS;
+		this.dealTimer = setTimeout(() => this.tickDealing(gen), pace);
+	}
+
+	private cancelTimers() {
 		if (this.timer !== undefined) {
 			clearTimeout(this.timer);
 			this.timer = undefined;
+		}
+		if (this.dealTimer !== undefined) {
+			clearTimeout(this.dealTimer);
+			this.dealTimer = undefined;
 		}
 	}
 
 	/** Bots are driven from explicit calls (never $effect) to avoid loops. */
 	private schedule() {
 		this.cancelTimer();
+		if (this.dealing || this.dealingPending) return;
 		const state = this.state;
 		if (!state || state.phase !== 'playing' || state.turn === 0 || state.turn === -1) return;
 		const gen = this.generation;
@@ -125,14 +207,17 @@ class GameStore {
 		this.state = next;
 		if (next.phase === 'playing') this.schedule();
 	}
+
+	private cancelTimer() {
+		if (this.timer !== undefined) {
+			clearTimeout(this.timer);
+			this.timer = undefined;
+		}
+	}
 }
 
 export const game = new GameStore();
 
-export const SEAT_NAMES = ['You', 'West', 'North', 'East'] as const;
-
-// Dev/test hook — always available against the dev server (E2E and manual QA);
-// tree-shaken out of production builds.
 if (import.meta.env.DEV && typeof window !== 'undefined') {
 	(window as unknown as Record<string, unknown>).__thirteen = {
 		store: game,
