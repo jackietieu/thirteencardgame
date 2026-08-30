@@ -17,19 +17,50 @@ export interface ServerOptions {
 	/** Interval for sweeping lobby rooms with no connected humans. */
 	sweepIntervalMs?: number;
 	seedFactory?: () => number | undefined;
+	/** Max concurrent rooms — bounds memory and Postgres row churn. */
+	maxRooms?: number;
+	/** Sustained client messages/second per socket. */
+	msgRatePerSec?: number;
+	/** Token-bucket burst (messages allowed back-to-back). */
+	msgBurst?: number;
 }
 
 /** WS frame handling for one connected socket. */
-function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
+function serveSocket(
+	ws: WebSocket,
+	rooms: Map<string, Room>,
+	limits: { rate: number; burst: number; maxRooms: number }
+) {
 	let joined: { room: Room; conn: SeatConn } | undefined;
 	const send = (msg: ServerMessage) => ws.send(JSON.stringify(msg));
 	const seatConn: SeatConn = { send };
+	// Token bucket: `burst` messages back-to-back, refilling at `rate`/s.
+	let tokens = limits.burst;
+	let lastRefill = Date.now();
+	const allowMessage = () => {
+		const now = Date.now();
+		tokens = Math.min(limits.burst, tokens + ((now - lastRefill) / 1000) * limits.rate);
+		lastRefill = now;
+		if (tokens < 1) return false;
+		tokens -= 1;
+		return true;
+	};
+	// Oversized frames (maxPayload) and protocol violations emit an unhandled
+	// 'error' that would crash the process — swallow; 'close' fires after and
+	// cleans up the seat.
+	ws.on('error', () => {});
 
 	ws.on('close', () => {
 		if (joined) joined.room.disconnect(seatConn);
 	});
 
 	ws.on('message', async (raw) => {
+		// Rate gate first: floods die before JSON parsing or room work.
+		if (!allowMessage()) {
+			send({ t: 'error', code: 'rate_limited', on: -1 });
+			ws.close(1008, 'rate limited');
+			return;
+		}
 		let msg: ClientMessage;
 		try {
 			msg = JSON.parse(String(raw)) as ClientMessage;
@@ -58,6 +89,9 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 		}
 		switch (msg.t) {
 			case 'create': {
+				if (rooms.size >= limits.maxRooms) {
+					return send({ t: 'error', code: 'server_full', on: -1 });
+				}
 				let code = makeRoomCode();
 				while (rooms.has(code)) code = makeRoomCode();
 				const room = new Room({ code, password: msg.password, seed: undefined });
@@ -100,6 +134,11 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
  */
 export function startServer(options: ServerOptions = {}): Promise<ServerHandle> {
 	const rooms = new Map<string, Room>();
+	const limits = {
+		maxRooms: options.maxRooms ?? 256,
+		rate: options.msgRatePerSec ?? 20,
+		burst: options.msgBurst ?? 40
+	};
 	const sweep = setInterval(() => {
 		for (const [code, room] of rooms) {
 			if (room.isEmpty() && room.phase() === 'lobby') {
@@ -110,8 +149,10 @@ export function startServer(options: ServerOptions = {}): Promise<ServerHandle> 
 		}
 	}, options.sweepIntervalMs ?? 5 * 60_000);
 
-	const wss = new WebSocketServer({ noServer: true });
-	wss.on('connection', (ws: WebSocket) => serveSocket(ws, rooms));
+	// maxPayload kills oversized frames at the protocol level (close 1009) —
+	// no client message legitimately approaches 4 KiB.
+	const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
+	wss.on('connection', (ws: WebSocket) => serveSocket(ws, rooms, limits));
 
 	const http = createServer((_req, res) => {
 		res.writeHead(200, { 'content-type': 'application/json' });

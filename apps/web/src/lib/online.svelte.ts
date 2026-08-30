@@ -241,7 +241,7 @@ class OnlineGameStore implements GameDriver {
 				// screen instead of waiting forever on a lobby that never comes.
 				const rejectedJoin =
 					this.state === null &&
-					(msg.code === 'bad_password' || msg.code === 'room_not_found' || msg.code === 'room_full');
+					(msg.code === 'bad_password' || msg.code === 'room_not_found' || msg.code === 'room_full' || msg.code === 'server_full');
 				if (msg.code === 'room_not_found') saveRoom('');
 				if (rejectedJoin) {
 					const code = msg.code;
