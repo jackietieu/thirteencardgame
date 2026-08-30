@@ -18,6 +18,8 @@ export interface ClientCreate {
 	t: 'create';
 	sid: string;
 	name: string;
+	/** Optional lobby password — joiners must repeat it. */
+	password?: string;
 }
 
 export interface ClientStart {
@@ -29,6 +31,8 @@ export interface ClientJoin {
 	room: string;
 	sid: string;
 	name: string;
+	/** Required when the room was created with a lobby password. */
+	password?: string;
 }
 
 export interface ClientAction {

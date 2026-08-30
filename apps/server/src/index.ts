@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ClientMessage, ServerMessage } from '@thirteen/protocol';
-import { Room, makeRoomCode, type SeatConn } from './room.js';
+import { Room, RoomError, makeRoomCode, type SeatConn } from './room.js';
 
 export interface ServerHandle {
 	port: number;
@@ -52,7 +52,7 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 			case 'create': {
 				let code = makeRoomCode();
 				while (rooms.has(code)) code = makeRoomCode();
-				const room = new Room({ code, seed: undefined });
+				const room = new Room({ code, password: msg.password, seed: undefined });
 				rooms.set(code, room);
 				const seat = room.join(msg.name, msg.sid, seatConn);
 				joined = seat === null ? undefined : { room, conn: seatConn };
@@ -61,7 +61,13 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 			case 'join': {
 				const room = rooms.get(msg.room.toUpperCase());
 				if (!room) return send({ t: 'error', code: 'room_not_found', on: -1 });
-				const seat = room.join(msg.name, msg.sid, seatConn);
+				let seat: number | null;
+				try {
+					seat = room.join(msg.name, msg.sid, seatConn, msg.password);
+				} catch (err) {
+					if (err instanceof RoomError) return send({ t: 'error', code: err.code, on: -1 });
+					throw err;
+				}
 				if (seat === null) return send({ t: 'error', code: 'room_full', on: -1 });
 				joined = { room, conn: seatConn };
 				return;

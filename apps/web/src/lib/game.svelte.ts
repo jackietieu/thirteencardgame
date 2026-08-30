@@ -14,8 +14,8 @@ import {
 	type GameState,
 	type Move
 } from '@thirteen/engine';
+import { getName } from '$lib/name';
 import type { LogEntry } from '$lib/driver';
-
 export type { LogEntry };
 
 export const BOT_NAME_POOL = [
@@ -46,7 +46,7 @@ export const DEAL_INTERVAL_FAST_MS = 12;
 function pickBotNames(seed: number): string[] {
 	let rng = (seed ^ 0x5f3_759d) >>> 0;
 	const pool = [...BOT_NAME_POOL];
-	const names: string[] = ['You'];
+	const names: string[] = [getName() || 'You'];
 	for (let i = 0; i < 3; i++) {
 		const step = rngStep(rng);
 		rng = step.state;

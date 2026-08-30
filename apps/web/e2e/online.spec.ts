@@ -63,4 +63,44 @@ test('two humans + two bots: seats fill, views rotate, reload resumes', async ({
 	await ctxB.close();
 });
 
+test('share link + lobby password: newcomer is prompted for name, then password', async ({ browser }) => {
+	const ctxA = await browser.newContext();
+	const pageA = await ctxA.newPage();
+	await pageA.goto('/online');
+	await pageA.getByTestId('name-input').fill('Ann');
+	await pageA.getByTestId('create-password-input').fill('sesame');
+	await pageA.getByTestId('create-room').click();
+	await expect(pageA.getByTestId('room-code')).toBeVisible();
+	const code = (await pageA.getByTestId('room-code').textContent())?.trim() ?? '';
+
+	// The lobby exposes a share link aimed at this room.
+	const link = await pageA.getByTestId('share-link').inputValue();
+	expect(link).toContain(`/online?room=${code}`);
+
+	// A newcomer clicking the link gets the name prompt.
+	const ctxB = await browser.newContext();
+	const pageB = await ctxB.newPage();
+	await pageB.goto(link);
+	await expect(pageB.getByTestId('name-input')).toBeVisible();
+	await pageB.getByTestId('name-input').fill('Ben');
+	await pageB.getByTestId('join-button').click();
+
+	// The room is locked: the password prompt appears after the rejection.
+	await expect(pageB.getByTestId('join-password-input')).toBeVisible();
+	await pageB.getByTestId('join-password-input').fill('wrong');
+	await pageB.getByTestId('join-button').click();
+	await expect(pageB.getByTestId('connect-error')).toContainText('Wrong password');
+	await pageB.getByTestId('join-password-input').fill('sesame');
+	await pageB.getByTestId('join-button').click();
+	await expect(pageB.getByTestId('room-code')).toContainText(code, { ignoreCase: true });
+
+	// Host starts; both humans see the dealt table.
+	await pageA.getByTestId('start-button').click();
+	await expect(pageA.locator('.play-card').first()).toBeVisible({ timeout: 20_000 });
+	await expect(pageB.locator('.play-card').first()).toBeVisible({ timeout: 20_000 });
+
+	await ctxA.close();
+	await ctxB.close();
+});
+
 import type { Page } from '@playwright/test';

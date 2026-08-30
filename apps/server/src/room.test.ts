@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canPass, legalMoves, type Action } from '@thirteen/engine';
 import type { ServerMessage } from '@thirteen/protocol';
-import { Room, makeRoomCode } from './room.js';
+import { Room, RoomError, makeRoomCode } from './room.js';
 
 /** Recording fake connection — stands in for a browser WebSocket. */
 class FakeConn {
@@ -216,5 +216,23 @@ describe('room', () => {
 
 	it('makeRoomCode avoids ambiguous characters', () => {
 		expect(makeRoomCode(() => 0)).toBe('AAAA');
+	});
+
+	it('gates new joins behind the lobby password but exempts sid reclaim', () => {
+		const room = new Room({ code: 'PW', password: 'sesame', seed: 42 });
+		const host = new FakeConn();
+		room.join('Ann', 'sid-a', host);
+
+		const noPw = new FakeConn();
+		expect(() => room.join('Ben', 'sid-b', noPw)).toThrowError(RoomError);
+		const wrong = new FakeConn();
+		expect(() => room.join('Ben', 'sid-b', wrong, 'wrong')).toThrowError(RoomError);
+		expect(room.lobbyMessage(0)).toMatchObject({ players: ['Ann', '', '', ''] });
+
+		const good = new FakeConn();
+		expect(room.join('Ben', 'sid-b', good, 'sesame')).toBe(1);
+
+		// Reload: same sid, no password — reclaims the seat instead of erroring.
+		expect(room.join('Ben', 'sid-b', good)).toBe(1);
 	});
 });
