@@ -9,8 +9,9 @@
 
 [build.environment]
   NODE_VERSION = "24"
-  # Set VITE_GAME_WS_URL here or in the Netlify UI, e.g.:
-  #   VITE_GAME_WS_URL = "wss://thirteen-gameserver.fly.dev/ws"
+  # VITE_GAME_WS_URL is baked into the web build; without it the deployed app
+  # falls back to same-origin /ws, which static hosting cannot proxy.
+  VITE_GAME_WS_URL = "wss://thirteen-server.fly.dev/ws"
   # Unset, the app expects a same-origin /ws reverse proxy in front of the
   # game server (Netlify's plain static hosting cannot provide one).
 
