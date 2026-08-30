@@ -1,0 +1,12 @@
+# Keep the Fly build context small: only package manifests + sources are needed.
+node_modules
+.git
+.github
+.svelte-kit
+build
+test-results
+playwright-report
+.env
+.env.*
+*.md
+netlify.toml
