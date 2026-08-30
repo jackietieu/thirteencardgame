@@ -1,0 +1,37 @@
+# Fly.io deployment for the Thirteen game server (WebSocket backend).
+# Deploy from the repository root: `fly launch` once, then `fly deploy`.
+# The frontend stays on Netlify; point it here with VITE_GAME_WS_URL:
+#   wss://thirteen-server.fly.dev/ws
+#
+# Hobby cost model: one shared-cpu-1x / 256MB machine, metered per second.
+# auto_stop suspends the machine when the last connection (WebSocket counts)
+# closes, so idle cost is just the IPv4 address (~$0.28/mo).
+#
+# Auto-stop wipes in-memory rooms. Set a persistent secret to survive it:
+#   fly secrets set DATABASE_URL=postgresql://...   (Supabase works, see
+#   .env.example) — the server then restores rooms on demand from Postgres.
+
+app = "thirteen-server"
+primary_region = "sin"
+
+[build]
+  dockerfile = "apps/server/Dockerfile"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

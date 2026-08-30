@@ -1,8 +1,7 @@
 # Thirteen is a static SvelteKit app (adapter-static) — Netlify serves the
-# prebuilt `build/` directory. The real-time game server is a Node process
-# speaking WebSockets, which Netlify Functions cannot host: run it on any
-# WS-capable host (Fly.io, Render, Railway, a VPS) and point the web build at
-# it via VITE_GAME_WS_URL (see .env.example).
+# prebuilt `build/` directory. The real-time game server deploys to Fly.io
+# (see fly.toml + apps/server/Dockerfile; `fly launch` then `fly deploy`)
+# and the web build points at it via VITE_GAME_WS_URL (see .env.example).
 
 [build]
   command = "pnpm install --no-frozen-lockfile && pnpm --filter web build"
