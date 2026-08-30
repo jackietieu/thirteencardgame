@@ -28,11 +28,20 @@ interface Seat {
 
 export interface RoomOptions {
 	code: string;
+	/** Optional lobby password — new joiners must repeat it (sid reclaim is exempt). */
+	password?: string;
 	/** Delay before a bot acts (lets humans watch the trick develop). */
 	botDelayMs?: number;
 	/** How long a dropped human keeps the seat before a bot takes over. */
 	disconnectGraceMs?: number;
 	seed?: number;
+}
+
+/** Rejected non-action requests (e.g. wrong lobby password). */
+export class RoomError extends Error {
+	constructor(public code: string) {
+		super(code);
+	}
 }
 
 const mod4 = (n: number) => ((n % 4) + 4) % 4;
@@ -49,17 +58,16 @@ export class Room {
 	/** Global action counter — monotonic, sent with every snapshot. */
 	seq = 0;
 	private seats: (Seat | null)[] = [null, null, null, null];
+	private password: string;
 	private botDelayMs: number;
 	private disconnectGraceMs: number;
-	private seed: number | undefined;
 	private botTimer: ReturnType<typeof setTimeout> | undefined;
 	private closed = false;
 
 	constructor(options: RoomOptions) {
 		this.code = options.code;
 		this.botDelayMs = options.botDelayMs ?? 500;
-		this.disconnectGraceMs = options.disconnectGraceMs ?? 60_000;
-		this.seed = options.seed;
+		this.password = options.password ?? '';
 	}
 
 	/** Seats with a live connection (bots excluded). */
@@ -139,10 +147,10 @@ export class Room {
 
 	/**
 	 * Attaches a human. Rejoins by `sid` reclaim the same seat (mid-game reload);
-	 * otherwise the first open seat is assigned. Returns the seat, or null when
-	 * the room is full.
+	 * otherwise the first open seat is assigned — gated by the lobby password.
+	 * Returns the seat, or null when the room is full.
 	 */
-	join(name: string, sid: string, conn: SeatConn): number | null {
+	join(name: string, sid: string, conn: SeatConn, password?: string): number | null {
 		const existing = this.seats.findIndex((s) => s !== null && s.sid === sid);
 		if (existing !== -1) {
 			const s = this.seats[existing]!;
@@ -155,6 +163,9 @@ export class Room {
 			}
 			this.deliver(existing, conn);
 			return existing;
+		}
+		if (this.password !== '' && this.seats.some((s) => s !== null) && password !== this.password) {
+			throw new RoomError('bad_password');
 		}
 		const open = this.seats.findIndex((s) => s === null);
 		if (open === -1) return null;

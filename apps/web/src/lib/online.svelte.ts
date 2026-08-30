@@ -1,12 +1,11 @@
 import { legalMoves, validateMove, type Move } from '@thirteen/engine';
 import type { SeatView, ServerMessage } from '@thirteen/protocol';
+import { getName, setName } from '$lib/name';
 import { DEAL_INTERVAL_FAST_MS, DEAL_INTERVAL_MS } from '$lib/game.svelte';
 import type { GameDriver, LogEntry } from '$lib/driver';
 
 type Status = 'idle' | 'connecting' | 'lobby' | 'playing' | 'reconnecting';
-
 const SID_KEY = 'thirteen.sid';
-const NAME_KEY = 'thirteen.name';
 const ROOM_KEY = 'thirteen.room';
 
 function getSid(): string {
@@ -16,14 +15,6 @@ function getSid(): string {
 		localStorage.setItem(SID_KEY, sid);
 	}
 	return sid;
-}
-
-export function getName(): string {
-	return localStorage.getItem(NAME_KEY) ?? '';
-}
-
-export function setName(name: string) {
-	localStorage.setItem(NAME_KEY, name);
 }
 
 function getSavedRoom(): string {
@@ -64,6 +55,8 @@ class OnlineGameStore implements GameDriver {
 	lobbyBots = $state<boolean[]>([]);
 	mySeat = $state(-1);
 	hostSeat = $state(-1);
+	/** The room requires a lobby password — the join form must show the field. */
+	needsPassword = $state(false);
 
 	private ws: WebSocket | null = null;
 	private seq = 0;
@@ -79,13 +72,19 @@ class OnlineGameStore implements GameDriver {
 	legal = $derived<Move[]>(this.state ? legalMoves(this.state, 0) : []);
 	myTurn = $derived(this.state?.phase === 'playing' && this.state.turn === 0);
 
-	create() {
-		this.connect((ws) => ws.send(JSON.stringify({ t: 'create', sid: getSid(), name: getName() || 'Player' })));
+	create(password?: string) {
+		this.needsPassword = false;
+		this.connect((ws) =>
+			ws.send(JSON.stringify({ t: 'create', sid: getSid(), name: getName() || 'Player', password }))
+		);
 	}
 
-	join(code: string) {
+	join(code: string, password?: string) {
 		const room = code.trim().toUpperCase();
-		this.connect((ws) => ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player' })));
+		this.needsPassword = false;
+		this.connect((ws) =>
+			ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player', password }))
+		);
 	}
 
 	/** Host action: fill empty seats with bots and deal. */
@@ -156,13 +155,27 @@ class OnlineGameStore implements GameDriver {
 					});
 				}
 				return;
-			case 'error':
+			case 'error': {
+				// Join rejections leave the socket un-joined: reset to the connect
+				// screen instead of waiting forever on a lobby that never comes.
+				const rejectedJoin =
+					this.state === null &&
+					(msg.code === 'bad_password' || msg.code === 'room_not_found' || msg.code === 'room_full');
 				if (msg.code === 'room_not_found') saveRoom('');
+				if (rejectedJoin) {
+					const code = msg.code;
+					this.openHandler = null;
+					this.teardown();
+					if (code === 'bad_password') this.needsPassword = true;
+					this.lastError = code;
+					return;
+				}
 				if (msg.code !== 'not_joined') {
 					this.lastError = msg.code;
 					this.shake++;
 				}
 				return;
+			}
 			default:
 				return;
 		}
@@ -252,7 +265,9 @@ class OnlineGameStore implements GameDriver {
 export const online = new OnlineGameStore();
 
 // Auto-resume: a saved room + name rejoins the seat on page load (reload support).
+// A ?room= share link takes precedence — the /online page drives that join instead.
 if (typeof window !== 'undefined') {
-	const saved = getSavedRoom();
+	const fromLink = new URLSearchParams(window.location.search).get('room');
+	const saved = fromLink ? '' : getSavedRoom();
 	if (saved && getName()) online.join(saved);
 }
