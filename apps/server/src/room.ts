@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { greedyBot } from '@thirteen/bots';
 import {
 	applyMove,
@@ -8,6 +9,7 @@ import {
 	type GameState
 } from '@thirteen/engine';
 import type { SeatView, ServerMessage } from '@thirteen/protocol';
+import { loadRoomState, recordGame, saveRoomState, upsertPlayer } from './db.js';
 
 /** Names handed to server-driven bots as they fill seats. */
 const BOT_NAMES = ['Hùng', 'Lan', 'Mai', 'Tuấn', 'Smith', 'Johnson', 'Williams', 'Brown'];
@@ -46,10 +48,16 @@ export class RoomError extends Error {
 
 const mod4 = (n: number) => ((n % 4) + 4) % 4;
 
+function sha256(input: string): string {
+	return createHash('sha256').update(input).digest('hex');
+}
+
 /**
  * One game room: an authoritative engine state plus up to four seats. Humans
  * connect over WS; empty seats are filled with bots when the host starts.
  * All engine rules are enforced here — the client is a display, never a judge.
+ * State and seats persist to Postgres when DATABASE_URL is set, so refreshes
+ * and server restarts resume the same game.
  */
 export class Room {
 	readonly code: string;
@@ -58,18 +66,23 @@ export class Room {
 	/** Global action counter — monotonic, sent with every snapshot. */
 	seq = 0;
 	private seats: (Seat | null)[] = [null, null, null, null];
-	private password: string;
 	private botDelayMs: number;
 	private disconnectGraceMs: number;
+	private seed: number | undefined;
 	private botTimer: ReturnType<typeof setTimeout> | undefined;
 	private closed = false;
+	/** Hand whose game-over result was already written to the database. */
+	private recordedHand = -1;
+	/** Serializes snapshot writes so an older payload never lands last. */
+	private persistTail: Promise<void> = Promise.resolve();
 
 	constructor(options: RoomOptions) {
 		this.code = options.code;
+		this.passwordHash = options.password ? sha256(options.password) : '';
 		this.botDelayMs = options.botDelayMs ?? 500;
-		this.password = options.password ?? '';
+		this.disconnectGraceMs = options.disconnectGraceMs ?? 60_000;
+		this.seed = options.seed;
 	}
-
 	/** Seats with a live connection (bots excluded). */
 	private liveHumanCount(): number {
 		return this.seats.filter((s) => s !== null && !s.bot && s.conn !== null).length;
@@ -119,7 +132,73 @@ export class Room {
 
 	private broadcastState() {
 		this.eachHuman((seat, conn) => conn.send(this.stateMessage(seat)));
+		this.persist();
+		this.recordGameIfOver();
 	}
+
+	/** Fire-and-forget room snapshot — refreshes and restarts resume from it.
+	 *  The payload is captured synchronously; writes are chained so an older
+	 *  snapshot can never overwrite a newer one. */
+	private persist() {
+		const seats = this.seats.map((s): object | null =>
+			s ? { name: s.name, sid: s.sid, bot: s.bot, lastSeq: s.lastSeq } : null
+		);
+		const payload = { passwordHash: this.passwordHash, state: this.state, seats };
+		this.persistTail = this.persistTail.then(
+			() => saveRoomState(this.code, payload),
+			() => saveRoomState(this.code, payload)
+		);
+	}
+
+	/** Writes one row per completed game (deduped per hand). */
+	private recordGameIfOver() {
+		if (!this.state || this.state.phase !== 'gameOver' || this.recordedHand === this.state.handNumber) return;
+		this.recordedHand = this.state.handNumber;
+		void recordGame(this.code, this.state.scores, this.state.winner);
+	}
+
+	/**
+	 * Rebuilds a room from its persisted snapshot (Postgres). Used when a
+	 * player joins a room the server no longer has in memory — e.g. after a
+	 * restart. Seats without a live connection re-arm their takeover timer.
+	 */
+	static async restore(code: string): Promise<Room | null> {
+		const row = await loadRoomState(code);
+		if (!row) return null;
+		const room = new Room({ code });
+		room.passwordHash = row.passwordHash;
+		if (row.state && (row.state as GameState).phase) {
+			room.state = row.state as GameState;
+			if (room.state.phase === 'gameOver') room.recordedHand = room.state.handNumber;
+		}
+		room.seats = row.seats.map((s) => ({
+			name: s.name,
+			sid: s.sid,
+			conn: null,
+			bot: s.bot,
+			lastSeq: s.lastSeq,
+			takeoverTimer: undefined
+		}));
+		for (let seat = 0; seat < 4; seat++) room.armTakeover(seat);
+		room.scheduleBot();
+		return room;
+	}
+
+	/** Starts the grace timer for a human seat whose connection dropped. */
+	private armTakeover(seat: number) {
+		const s = this.seats[seat];
+		if (!s || s.bot || s.conn !== null || this.state === null || s.takeoverTimer !== undefined) return;
+		s.takeoverTimer = setTimeout(() => {
+			s.takeoverTimer = undefined;
+			if (s.conn !== null) return; // came back in time
+			s.bot = true;
+			s.name = BOT_NAMES[seat % BOT_NAMES.length]!;
+			this.broadcastEvent('botTakeover', seat);
+			this.broadcastState();
+			this.scheduleBot();
+		}, this.disconnectGraceMs);
+	}
+
 
 	private broadcastEvent(
 		name: 'played' | 'passed' | 'nextHand' | 'seatLeft' | 'botTakeover',
@@ -162,15 +241,19 @@ export class Room {
 				s.takeoverTimer = undefined;
 			}
 			this.deliver(existing, conn);
+			this.persist();
 			return existing;
 		}
-		if (this.password !== '' && this.seats.some((s) => s !== null) && password !== this.password) {
+		// The room creator (first seat into an empty room) is exempt: they set the password.
+		if (this.passwordHash !== '' && this.seats.some((s) => s !== null) && (!password || sha256(password) !== this.passwordHash)) {
 			throw new RoomError('bad_password');
 		}
 		const open = this.seats.findIndex((s) => s === null);
 		if (open === -1) return null;
 		this.seats[open] = { name, sid, conn, bot: false, lastSeq: 0, takeoverTimer: undefined };
 		this.deliver(open, conn);
+		void upsertPlayer(sid, name);
+		this.persist();
 		return open;
 	}
 
@@ -188,15 +271,8 @@ export class Room {
 			s.conn = null;
 			if (this.state !== null && !s.bot) {
 				this.broadcastEvent('seatLeft', seat);
-				s.takeoverTimer = setTimeout(() => {
-					s.takeoverTimer = undefined;
-					if (s.conn !== null) return; // came back in time
-					s.bot = true;
-					s.name = BOT_NAMES[seat % BOT_NAMES.length]!;
-					this.broadcastEvent('botTakeover', seat);
-					this.broadcastState();
-					this.scheduleBot();
-				}, this.disconnectGraceMs);
+				this.persist();
+				this.armTakeover(seat);
 			}
 		}
 	}
@@ -217,6 +293,7 @@ export class Room {
 				this.broadcastEvent('botTakeover', seat);
 			}
 			this.broadcastLobby();
+			this.persist();
 			this.scheduleBot();
 		}
 	}

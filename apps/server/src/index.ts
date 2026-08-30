@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ClientMessage, ServerMessage } from '@thirteen/protocol';
 import { Room, RoomError, makeRoomCode, type SeatConn } from './room.js';
+import { deleteRoomState } from './db.js';
 
 export interface ServerHandle {
 	port: number;
@@ -25,7 +26,7 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 		if (joined) joined.room.disconnect(seatConn);
 	});
 
-	ws.on('message', (raw) => {
+	ws.on('message', async (raw) => {
 		let msg: ClientMessage;
 		try {
 			msg = JSON.parse(String(raw)) as ClientMessage;
@@ -59,7 +60,14 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 				return;
 			}
 			case 'join': {
-				const room = rooms.get(msg.room.toUpperCase());
+				const code = msg.room.toUpperCase();
+				let room = rooms.get(code);
+				if (!room) {
+					// Not in memory — a refresh/rejoin after a server restart can
+					// still resume the game from the persisted snapshot.
+					room = await Room.restore(code);
+					if (room) rooms.set(code, room);
+				}
 				if (!room) return send({ t: 'error', code: 'room_not_found', on: -1 });
 				let seat: number | null;
 				try {
@@ -80,7 +88,8 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 
 /**
  * The game server: HTTP health endpoint plus WS upgrades on `/ws`. Rooms live
- * in memory — games are short, and a restart drops them by design.
+ * in memory and mirror to Postgres when DATABASE_URL is set; the sweep drops
+ * abandoned lobby rooms from both.
  */
 export function startServer(options: ServerOptions = {}): Promise<ServerHandle> {
 	const rooms = new Map<string, Room>();
@@ -89,6 +98,7 @@ export function startServer(options: ServerOptions = {}): Promise<ServerHandle> 
 			if (room.isEmpty() && room.phase() === 'lobby') {
 				room.close();
 				rooms.delete(code);
+				void deleteRoomState(code);
 			}
 		}
 	}, options.sweepIntervalMs ?? 5 * 60_000);

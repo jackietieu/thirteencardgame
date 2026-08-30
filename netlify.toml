@@ -1,0 +1,22 @@
+# Thirteen is a static SvelteKit app (adapter-static) — Netlify serves the
+# prebuilt `build/` directory. The real-time game server is a Node process
+# speaking WebSockets, which Netlify Functions cannot host: run it on any
+# WS-capable host (Fly.io, Render, Railway, a VPS) and point the web build at
+# it via VITE_GAME_WS_URL (see .env.example).
+
+[build]
+  command = "pnpm install --no-frozen-lockfile && pnpm --filter web build"
+  publish = "apps/web/build"
+
+[build.environment]
+  NODE_VERSION = "24"
+  # Set VITE_GAME_WS_URL here or in the Netlify UI, e.g.:
+  #   VITE_GAME_WS_URL = "wss://thirteen-gameserver.fly.dev/ws"
+  # Unset, the app expects a same-origin /ws reverse proxy in front of the
+  # game server (Netlify's plain static hosting cannot provide one).
+
+# SPA fallback: unknown paths render the app shell; real files still win.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
