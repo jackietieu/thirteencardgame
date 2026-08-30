@@ -87,6 +87,9 @@ describe('ws server', () => {
 		const room = lobby.t === 'lobby' ? lobby.room : '';
 		b.send({ t: 'join', room, sid: 'sid-b', name: 'Ben' });
 		await b.waitFor((m) => m.t === 'lobby');
+		// The host must see the roster update — the reported join-visibility bug.
+		const lobby2 = await a.waitFor((m) => m.t === 'lobby' && m.players[1] === 'Ben');
+		expect(lobby2.t === 'lobby' && lobby2.players).toEqual(['Ann', 'Ben', '', '']);
 		a.send({ t: 'start' });
 		const sa = await a.waitFor((m) => m.t === 'state');
 		const sb = await b.waitFor((m) => m.t === 'state');

@@ -93,6 +93,29 @@ describe('room', () => {
 		expect(room.join('P5', 'sid-5', fifth)).toBeNull();
 	});
 
+	it('joining broadcasts the lobby to everyone already seated', () => {
+		const room = makeRoom();
+		const host = new FakeConn();
+		room.join('P0', 'sid-0', host);
+		const guest = new FakeConn();
+		room.join('P1', 'sid-1', guest);
+		const lobbies = host.sent.filter((m) => m.t === 'lobby');
+		expect(lobbies).toHaveLength(2);
+		expect(lobbies[1]).toMatchObject({ t: 'lobby', players: ['P0', 'P1', '', ''], hostSeat: 0 });
+	});
+
+	it('a renaming rejoin refreshes the lobby roster', () => {
+		const room = makeRoom();
+		const host = new FakeConn();
+		room.join('P0', 'sid-0', host);
+		room.join('P1', 'sid-1', new FakeConn());
+		host.sent.length = 0;
+		room.join('Ace', 'sid-1', new FakeConn());
+		const lobbies = host.sent.filter((m) => m.t === 'lobby');
+		expect(lobbies).toHaveLength(1);
+		expect(lobbies[0]).toMatchObject({ players: ['P0', 'Ace', '', ''] });
+	});
+
 	it('only the host can start; start fills bots and deals', () => {
 		const room = makeRoom();
 		const seats = joinFour(room);

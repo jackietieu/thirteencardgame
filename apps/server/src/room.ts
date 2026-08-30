@@ -238,6 +238,7 @@ export class Room {
 		const existing = this.seats.findIndex((s) => s !== null && s.sid === sid);
 		if (existing !== -1) {
 			const s = this.seats[existing]!;
+			const renamed = Boolean(name) && s.name !== name;
 			s.name = name || s.name;
 			s.conn = conn;
 			s.bot = false;
@@ -250,6 +251,7 @@ export class Room {
 			}
 			this.deliver(existing, conn);
 			this.persist();
+			if (renamed && this.state === null) this.broadcastLobby();
 			return existing;
 		}
 		// The room creator (first seat into an empty room) is exempt: they set the password.
@@ -259,9 +261,12 @@ export class Room {
 		const open = this.seats.findIndex((s) => s === null);
 		if (open === -1) return null;
 		this.seats[open] = { name, sid, conn, bot: false, lastSeq: 0, takeoverTimer: undefined };
-		this.deliver(open, conn);
 		void upsertPlayer(sid, name);
 		this.persist();
+		// New seats only open up in the lobby (mid-game seats are always
+		// occupied); everyone seated must see the updated roster.
+		if (this.state === null) this.broadcastLobby();
+		else this.deliver(open, conn);
 		return open;
 	}
 
