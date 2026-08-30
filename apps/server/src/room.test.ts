@@ -27,6 +27,7 @@ class FakeConn {
 
 const GRACE = 30;
 const BOT_DELAY = 5;
+const PASS: Action = { type: 'pass', cards: [] };
 
 function makeRoom(seed = 42) {
 	return new Room({ code: 'TEST', seed, botDelayMs: BOT_DELAY, disconnectGraceMs: GRACE });
@@ -50,7 +51,7 @@ function runDueBot(room: ReturnType<typeof makeRoom>, maxChained = 4) {
 
 function legalAction(state: NonNullable<Room['state']>, turn: number): Action {
 	return canPass(state, turn)
-		? [...legalMoves(state, turn), { type: 'pass', cards: [] }][0]!
+		? [...legalMoves(state, turn), PASS][0]!
 		: legalMoves(state, turn)[0]!;
 }
 
@@ -170,6 +171,63 @@ describe('room', () => {
 		}
 		vi.advanceTimersByTime(GRACE + 1);
 		expect(room.seatIsBot(1)).toBe(false);
+	});
+
+	it('a reclaimed seat accepts a fresh action counter after a page reload', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.start(seats[0]!);
+		playHand(room, seats);
+		room.disconnect(seats[1]!);
+		const rejoin = new FakeConn();
+		room.join('P1', 'sid-1', rejoin);
+		// Drive play until seat 1 must act, then send with a brand-new counter.
+		for (let i = 0; i < 200; i++) {
+			let state = room.state!;
+			if (state.phase === 'handOver') {
+				room.nextHand(seats[0]!);
+				state = room.state!;
+			}
+			if (state.phase !== 'playing') break;
+			if (room.seatIsBot(state.turn)) {
+				runDueBot(room, 1);
+				continue;
+			}
+			if (state.turn !== 1) {
+				const conn = seats[state.turn]!;
+				room.action(conn, conn.nextSeq(), legalAction(state, state.turn));
+				runDueBot(room);
+				continue;
+			}
+			const before = room.seq;
+			room.action(rejoin, 1, legalAction(state, 1));
+			expect(room.seq).toBe(before + 1);
+			return;
+		}
+		throw new Error('seat 1 never got a turn');
+	});
+
+	it('leave in the lobby frees the seat and broadcasts the lobby', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.leave(seats[2]!);
+		const lobby = room.lobbyMessage(0);
+		expect(lobby.t === 'lobby' && lobby.players).toEqual(['P0', 'P1', '', 'P3']);
+		const late = new FakeConn();
+		expect(room.join('Late', 'sid-late', late)).toBe(2);
+	});
+
+	it('leave mid-game hands the seat to a bot and informs the other humans', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.start(seats[0]!);
+		playHand(room, seats);
+		room.leave(seats[1]!);
+		expect(room.seatIsBot(1)).toBe(true);
+		expect(seats[0]!.events('botTakeover').length).toBe(1);
+		// Remaining humans get an updated snapshot that names the new bot.
+		const last = seats[0]!.states().at(-1)!;
+		expect(last.t === 'state' && last.seatNames.includes('Lan')).toBe(true);
 	});
 
 	it('plays a full four-human game to game over', () => {

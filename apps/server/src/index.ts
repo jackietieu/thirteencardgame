@@ -61,7 +61,7 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 			}
 			case 'join': {
 				const code = msg.room.toUpperCase();
-				let room = rooms.get(code);
+				let room: Room | null | undefined = rooms.get(code);
 				if (!room) {
 					// Not in memory — a refresh/rejoin after a server restart can
 					// still resume the game from the persisted snapshot.

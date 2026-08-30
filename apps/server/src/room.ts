@@ -9,7 +9,7 @@ import {
 	type GameState
 } from '@thirteen/engine';
 import type { SeatView, ServerMessage } from '@thirteen/protocol';
-import { loadRoomState, recordGame, saveRoomState, upsertPlayer } from './db.js';
+import { loadRoomState, recordGame, saveRoomState, upsertPlayer, type PersistedSeat } from './db.js';
 
 /** Names handed to server-driven bots as they fill seats. */
 const BOT_NAMES = ['Hùng', 'Lan', 'Mai', 'Tuấn', 'Smith', 'Johnson', 'Williams', 'Brown'];
@@ -61,6 +61,8 @@ function sha256(input: string): string {
  */
 export class Room {
 	readonly code: string;
+	/** sha256 of the lobby password, or '' when the room is open. */
+	passwordHash = '';
 	/** null until the host starts the game. */
 	state: GameState | null = null;
 	/** Global action counter — monotonic, sent with every snapshot. */
@@ -136,11 +138,16 @@ export class Room {
 		this.recordGameIfOver();
 	}
 
+	/** Lobby snapshot to every connected human (seat order changed). */
+	private broadcastLobby() {
+		this.eachHuman((seat, conn) => conn.send(this.lobbyMessage(seat)));
+	}
+
 	/** Fire-and-forget room snapshot — refreshes and restarts resume from it.
 	 *  The payload is captured synchronously; writes are chained so an older
 	 *  snapshot can never overwrite a newer one. */
 	private persist() {
-		const seats = this.seats.map((s): object | null =>
+		const seats = this.seats.map((s): PersistedSeat | null =>
 			s ? { name: s.name, sid: s.sid, bot: s.bot, lastSeq: s.lastSeq } : null
 		);
 		const payload = { passwordHash: this.passwordHash, state: this.state, seats };
@@ -171,14 +178,12 @@ export class Room {
 			room.state = row.state as GameState;
 			if (room.state.phase === 'gameOver') room.recordedHand = room.state.handNumber;
 		}
-		room.seats = row.seats.map((s) => ({
-			name: s.name,
-			sid: s.sid,
-			conn: null,
-			bot: s.bot,
-			lastSeq: s.lastSeq,
-			takeoverTimer: undefined
-		}));
+		room.seats = Array.from({ length: 4 }, (_, i) => {
+			const s = row.seats[i];
+			return s
+				? { name: s.name, sid: s.sid, conn: null, bot: s.bot, lastSeq: s.lastSeq, takeoverTimer: undefined }
+				: null;
+		});
 		for (let seat = 0; seat < 4; seat++) room.armTakeover(seat);
 		room.scheduleBot();
 		return room;
@@ -236,6 +241,9 @@ export class Room {
 			s.name = name || s.name;
 			s.conn = conn;
 			s.bot = false;
+			// The client is fresh (reload): its action counter restarted at 1,
+			// so the persisted lastSeq would silently drop every new action.
+			s.lastSeq = 0;
 			if (s.takeoverTimer !== undefined) {
 				clearTimeout(s.takeoverTimer);
 				s.takeoverTimer = undefined;
@@ -287,12 +295,13 @@ export class Room {
 			}
 			if (this.state === null) {
 				this.seats[seat] = null;
+				this.broadcastLobby();
 			} else {
-				s.conn = null;
 				s.bot = true; // explicit leave mid-game: hand the seat to a bot now
+				s.name = BOT_NAMES[seat % BOT_NAMES.length]!;
 				this.broadcastEvent('botTakeover', seat);
+				this.broadcastState();
 			}
-			this.broadcastLobby();
 			this.persist();
 			this.scheduleBot();
 		}
