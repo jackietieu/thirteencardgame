@@ -27,16 +27,21 @@ function saveRoom(room: string) {
 	else localStorage.removeItem(ROOM_KEY);
 }
 
-function wsUrl(): string {
-	const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-	return `${proto}://${location.host}/ws`;
-}
 
 /**
  * Online driver: speaks the room protocol over WS. The server is
  * authoritative — this store renders snapshots (already rotated per seat) and
  * forwards intents. Reloads resume the seat via the stable sid + saved room.
  */
+function wsUrl(): string {
+	// Hosted: point VITE_GAME_WS_URL at the game server (wss://…). Unset —
+	// same-origin /ws (vite dev proxy, or a reverse proxy in production).
+	const hosted = import.meta.env.VITE_GAME_WS_URL;
+	if (hosted) return hosted;
+	const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+	return `${proto}://${location.host}/ws`;
+}
+
 class OnlineGameStore implements GameDriver {
 	state = $state<SeatView | null>(null);
 	seatNames = $state<string[]>([]);
@@ -55,6 +60,8 @@ class OnlineGameStore implements GameDriver {
 	lobbyBots = $state<boolean[]>([]);
 	mySeat = $state(-1);
 	hostSeat = $state(-1);
+	/** Last room we successfully joined — reconnects re-join it, never re-create. */
+	private lastRoom = '';
 	/** The room requires a lobby password — the join form must show the field. */
 	needsPassword = $state(false);
 
@@ -109,13 +116,26 @@ class OnlineGameStore implements GameDriver {
 		ws.onmessage = (e) => this.onMessage(JSON.parse(String(e.data)) as ServerMessage);
 		ws.onclose = () => {
 			if (this.status === 'idle') return;
-			// Resume: retry until the room accepts us again (seat survives server-side).
 			this.status = 'reconnecting';
 			this.backoffMs = Math.min(this.backoffMs * 2, 5000);
-			this.reconnectTimer = setTimeout(() => {
-				if (this.openHandler) this.openSocket(this.openHandler);
-			}, this.backoffMs);
+			this.reconnectTimer = setTimeout(() => this.reconnect(), this.backoffMs);
 		};
+	}
+
+	/**
+	 * Resume after a dropped socket. Once we have been in a room, re-join it
+	 * (the sid reclaims our seat server-side) — never replay `create`, which
+	 * would silently open a fresh room instead of resuming the game.
+	 */
+	private reconnect() {
+		const room = this.lastRoom || getSavedRoom();
+		if (room && this.status === 'reconnecting') {
+			this.openSocket((ws) =>
+				ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player' }))
+			);
+			return;
+		}
+		if (this.openHandler) this.openSocket(this.openHandler);
 	}
 
 	private onMessage(msg: ServerMessage) {
@@ -123,6 +143,7 @@ class OnlineGameStore implements GameDriver {
 			case 'lobby':
 				this.status = 'lobby';
 				this.room = msg.room;
+				this.lastRoom = msg.room;
 				saveRoom(msg.room);
 				this.lobbyPlayers = msg.players;
 				this.lobbyBots = msg.bots;
@@ -133,6 +154,7 @@ class OnlineGameStore implements GameDriver {
 				const prev = this.state;
 				this.status = 'playing';
 				this.room = this.room || getSavedRoom();
+				this.lastRoom = this.room;
 				saveRoom(this.room);
 				this.mySeat = msg.seat;
 				this.seatNames = msg.seatNames;
@@ -186,6 +208,7 @@ class OnlineGameStore implements GameDriver {
 		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
 			this.ws.send(JSON.stringify({ t: 'leave' }));
 		}
+		this.lastRoom = '';
 		saveRoom('');
 		this.teardown();
 	}

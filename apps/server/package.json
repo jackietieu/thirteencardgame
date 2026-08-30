@@ -15,6 +15,7 @@
     "@thirteen/bots": "workspace:*",
     "@thirteen/engine": "workspace:*",
     "@thirteen/protocol": "workspace:*",
+    "postgres": "^3.4.9",
     "ws": "^8.19.0"
   },
   "devDependencies": {

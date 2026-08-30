@@ -56,6 +56,9 @@ function pickBotNames(seed: number): string[] {
 	return names;
 }
 
+/** Saves the vs-bots game so a browser refresh resumes it exactly. */
+const LOCAL_KEY = 'thirteen.local';
+
 class GameStore {
 	state = $state<GameState | null>(null);
 	log = $state<LogEntry[]>([]);
@@ -91,17 +94,55 @@ class GameStore {
 
 	legal = $derived<Move[]>(this.state ? legalMoves(this.state, 0) : []);
 	myTurn = $derived(this.state?.phase === 'playing' && this.state.turn === 0);
+	private saveLocal() {
+		if (typeof localStorage === 'undefined' || !this.state) return;
+		localStorage.setItem(
+			LOCAL_KEY,
+			JSON.stringify({ state: this.state, log: this.log, seatNames: this.seatNames })
+		);
+	}
+
+	/** Adopts the persisted game (refresh support); false when none is saved. */
+	private restoreLocal(): boolean {
+		if (typeof localStorage === 'undefined') return false;
+		// An explicit ?seed= request means "start this exact game" — it wins
+		// over any saved snapshot.
+		if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('seed')) {
+			return false;
+		}
+		const raw = localStorage.getItem(LOCAL_KEY);
+		if (!raw) return false;
+		try {
+			const snap = JSON.parse(raw) as { state: GameState; log: LogEntry[]; seatNames: string[] };
+			if (!snap.state || !Array.isArray(snap.state.players)) return false;
+			this.cancelTimers();
+			this.state = snap.state;
+			this.log = snap.log ?? [];
+			this.seatNames = snap.seatNames ?? this.seatNames;
+			// The deal already happened; show the full hand immediately.
+			this.dealingPending = false;
+			this.dealing = false;
+			this.dealProgress = 52;
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	constructor() {
+		if (this.restoreLocal()) this.schedule();
+	}
 
 	newGame(seed?: number) {
 		this.cancelTimers();
 		this.generation++;
 		this.state = createGame(seed ?? this.urlSeed ?? undefined);
 		// state.rngState is the seed createGame used, so names follow ?seed too.
-		this.seatNames = pickBotNames(this.state.rngState);
 		this.dealingPending = true;
 		this.lastError = null;
 		this.dealing = false;
 		this.dealProgress = 0;
+		this.saveLocal();
 	}
 
 	/** Test hook: adopt an externally built state (E2E scenarios) — skips the deal gate. */
@@ -114,6 +155,7 @@ class GameStore {
 		this.dealingPending = false;
 		this.dealing = false;
 		this.dealProgress = 0;
+		this.saveLocal();
 		this.schedule();
 	}
 
@@ -144,7 +186,7 @@ class GameStore {
 		this.state = engineNextHand(state);
 		this.lastError = null;
 		this.dealingPending = true;
-		this.dealProgress = 0;
+		this.saveLocal();
 		this.startDealing();
 	}
 
@@ -202,6 +244,7 @@ class GameStore {
 		const next = applyMove(prev, seat, action);
 		this.log.push({ seat, action, handNumber: prev.handNumber });
 		this.state = next;
+		this.saveLocal();
 		if (next.phase === 'playing') this.schedule();
 	}
 
