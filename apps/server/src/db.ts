@@ -1,3 +1,5 @@
+import type { GameState } from '@thirteen/engine';
+
 import postgres from 'postgres';
 
 /**
@@ -63,8 +65,8 @@ export interface PersistedSeat {
 
 export interface PersistedRoom {
 	passwordHash: string;
-	state: unknown;
-	seats: PersistedSeat[];
+	state: GameState | null;
+	seats: (PersistedSeat | null)[];
 }
 
 export async function upsertPlayer(sid: string, name: string): Promise<void> {
@@ -88,7 +90,7 @@ export async function saveRoomState(code: string, room: PersistedRoom): Promise<
 		await ensureSchema();
 		await db`
 			insert into rooms (code, password_hash, state, seats, updated_at)
-			values (${code}, ${room.passwordHash}, ${room.state}::jsonb, ${room.seats}::jsonb, now())
+			values (${code}, ${room.passwordHash}, ${JSON.stringify(room.state)}::jsonb, ${JSON.stringify(room.seats)}::jsonb, now())
 			on conflict (code) do update set
 				password_hash = excluded.password_hash,
 				state = excluded.state,
@@ -112,8 +114,8 @@ export async function loadRoomState(code: string): Promise<PersistedRoom | null>
 		if (!row) return null;
 		return {
 			passwordHash: String(row.password_hash ?? ''),
-			state: row.state,
-			seats: (row.seats as PersistedSeat[]) ?? []
+			state: (row.state as GameState | null) ?? null,
+			seats: (row.seats as (PersistedSeat | null)[]) ?? []
 		};
 	} catch (err) {
 		console.warn('[db] room load failed:', err);
@@ -131,7 +133,11 @@ export async function deleteRoomState(code: string): Promise<void> {
 	}
 }
 
-export async function recordGame(code: string, scores: number[], winner: number): Promise<void> {
+export async function recordGame(
+	code: string,
+	scores: number[],
+	winner: number | null
+): Promise<void> {
 	const db = client();
 	if (!db) return;
 	try {

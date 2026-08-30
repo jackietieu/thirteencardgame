@@ -26,7 +26,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function legalAction(state: NonNullable<Room['state']>, turn: number): Action {
 	return canPass(state, turn)
-		? [...legalMoves(state, turn), { type: 'pass', cards: [] }][0]!
+		? [...legalMoves(state, turn), { type: 'pass', cards: [] } satisfies Action][0]!
 		: legalMoves(state, turn)[0]!;
 }
 
@@ -53,7 +53,7 @@ describe.skipIf(!process.env.DATABASE_URL)('room persistence (postgres)', () => 
 		const saved = await loadRoomState('PERSIST');
 		expect(saved).not.toBeNull();
 		expect(saved!.state).toMatchObject({ handNumber: 0 });
-		expect(saved!.seats.map((s) => s.sid)).toContain('sid-b');
+		expect(saved!.seats.map((s) => s?.sid)).toContain('sid-b');
 
 		// "Server restart": fresh Room instance restored from the DB row.
 		const restored = await Room.restore('PERSIST');
