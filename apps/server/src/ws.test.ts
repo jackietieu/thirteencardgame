@@ -102,4 +102,44 @@ describe('ws server', () => {
 		a.close();
 		b.close();
 	});
+
+	it('closes the socket on an oversized frame (maxPayload)', async () => {
+		const client = new WsClient(server.port);
+		await client.opened();
+		const closed = new Promise<{ code: number }>((resolve) => {
+			// The server tears down mid-write, so the client socket may also
+			// surface a write error — consume it; the close code is the assertion.
+			client.ws.on('error', () => {});
+			client.ws.once('close', (code: number) => resolve({ code }));
+		});
+		client.ws.send('x'.repeat(8192));
+		const close = await closed;
+		expect(close.code).toBe(1009);
+	});
+
+	it('rate-limits and closes flooding sockets', async () => {
+		const client = new WsClient(server.port);
+		await client.opened();
+		const limited = client.waitFor((m) => m.t === 'error' && m.code === 'rate_limited');
+		// Burst is 40; the server closes mid-flood, so later sends may fail locally.
+		try {
+			for (let i = 0; i < 80; i++) client.send({ t: 'nextHand' });
+		} catch {
+			// expected once the server has closed the socket
+		}
+		await limited;
+	});
+
+	it('rejects create when the server is at maxRooms', async () => {
+		const full = await startServer({ port: 0, maxRooms: 0 });
+		try {
+			const client = new WsClient(full.port);
+			await client.opened();
+			client.send({ t: 'create', sid: 'sid', name: 'p' });
+			await client.waitFor((m) => m.t === 'error' && m.code === 'server_full');
+			client.close();
+		} finally {
+			await full.close();
+		}
+	});
 });
