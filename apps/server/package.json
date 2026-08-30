@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "tsc --noEmit"
   },
   "dependencies": {
     "@thirteen/bots": "workspace:*",

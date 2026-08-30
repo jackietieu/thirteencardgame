@@ -9,7 +9,7 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "test": "pnpm -r test",
-    "check": "pnpm --filter web check",
+    "check": "pnpm -r check",
     "e2e": "pnpm --filter web test:e2e"
   }
 }
