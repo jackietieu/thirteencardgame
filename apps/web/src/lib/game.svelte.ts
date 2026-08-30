@@ -19,23 +19,23 @@ import type { LogEntry } from '$lib/driver';
 export type { LogEntry };
 
 export const BOT_NAME_POOL = [
-	// 25% Vietnamese, 75% American names.
+	// 25% Vietnamese, 75% common Western first names.
 	'Hùng',
 	'Lan',
 	'Mai',
 	'Tuấn',
-	'Smith',
-	'Johnson',
-	'Williams',
-	'Brown',
-	'Jones',
-	'Miller',
-	'Davis',
-	'Wilson',
-	'Anderson',
-	'Taylor',
-	'Thomas',
-	'Moore'
+	'Emma',
+	'Liam',
+	'Noah',
+	'Olivia',
+	'Ethan',
+	'Sophia',
+	'Lucas',
+	'Ava',
+	'Mason',
+	'Isabella',
+	'Logan',
+	'Mia'
 ] as const;
 
 /** Milliseconds between dealt cards in the dealing animation (normal pace). */
@@ -98,7 +98,12 @@ class GameStore {
 		if (typeof localStorage === 'undefined' || !this.state) return;
 		localStorage.setItem(
 			LOCAL_KEY,
-			JSON.stringify({ state: this.state, log: this.log, seatNames: this.seatNames })
+			JSON.stringify({
+				state: this.state,
+				log: this.log,
+				seatNames: this.seatNames,
+				pending: this.dealingPending
+			})
 		);
 	}
 
@@ -113,16 +118,22 @@ class GameStore {
 		const raw = localStorage.getItem(LOCAL_KEY);
 		if (!raw) return false;
 		try {
-			const snap = JSON.parse(raw) as { state: GameState; log: LogEntry[]; seatNames: string[] };
+			const snap = JSON.parse(raw) as {
+				state: GameState;
+				log: LogEntry[];
+				seatNames: string[];
+				pending?: boolean;
+			};
 			if (!snap.state || !Array.isArray(snap.state.players)) return false;
 			this.cancelTimers();
 			this.state = snap.state;
 			this.log = snap.log ?? [];
 			this.seatNames = snap.seatNames ?? this.seatNames;
-			// The deal already happened; show the full hand immediately.
-			this.dealingPending = false;
+			// A snapshot saved at the deal gate resumes gated; otherwise the deal
+			// already happened and the full hand shows immediately.
+			this.dealingPending = snap.pending ?? false;
 			this.dealing = false;
-			this.dealProgress = 52;
+			this.dealProgress = this.dealingPending ? 0 : 52;
 			return true;
 		} catch {
 			return false;
@@ -138,8 +149,10 @@ class GameStore {
 		this.generation++;
 		this.state = createGame(seed ?? this.urlSeed ?? undefined);
 		// state.rngState is the seed createGame used, so names follow ?seed too.
+		this.seatNames = pickBotNames(this.state.rngState);
 		this.dealingPending = true;
 		this.lastError = null;
+		this.log = [];
 		this.dealing = false;
 		this.dealProgress = 0;
 		this.saveLocal();
@@ -162,6 +175,7 @@ class GameStore {
 	play(move: Move) {
 		const state = this.state;
 		if (!state || state.turn !== 0) return;
+		if (this.dealing || this.dealingPending) return; // wait for the deal
 		const error = validateMove(state, 0, move);
 		if (error !== null) {
 			this.lastError = error;
@@ -175,6 +189,7 @@ class GameStore {
 	pass() {
 		const state = this.state;
 		if (!state || !canPass(state, 0)) return;
+		if (this.dealing || this.dealingPending) return; // wait for the deal
 		this.commit(state, 0, { type: 'pass', cards: [] });
 	}
 

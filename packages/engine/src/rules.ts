@@ -1,8 +1,8 @@
-import type { Card, GameState, Move, Rank } from './types.js';
+import type { Card, RulesState, Move, Rank } from './types.js';
 import { beats, classify } from './combos.js';
 import { containsCard, sortCards, THREE_SPADES } from './cards.js';
 
-export function canAct(state: GameState, seat: number): boolean {
+export function canAct(state: RulesState, seat: number): boolean {
   const player = state.players[seat];
   return (
     state.phase === 'playing' &&
@@ -14,12 +14,12 @@ export function canAct(state: GameState, seat: number): boolean {
 }
 
 /** May pass only mid-trick, at most once per trick, never while leading (rules 6.1–6.3). */
-export function canPass(state: GameState, seat: number): boolean {
+export function canPass(state: RulesState, seat: number): boolean {
   return canAct(state, seat) && state.trick.plays.length > 0;
 }
 
 /** The combination that must be beaten, or null while the trick is open. */
-export function currentRequirement(state: GameState): Move | null {
+export function currentRequirement(state: RulesState): Move | null {
   const last = state.trick.plays[state.trick.plays.length - 1];
   return last && last.action.type !== 'pass' ? last.action : null;
 }
@@ -34,7 +34,7 @@ export type MoveError =
   | 'opening_requires_3spades';
 
 /** Checks a play against every rule; null means legal. Used by applyMove and the UI. */
-export function validateMove(state: GameState, seat: number, move: Move): MoveError | null {
+export function validateMove(state: RulesState, seat: number, move: Move): MoveError | null {
   if (state.phase !== 'playing') return 'not_playing';
   if (state.turn !== seat) return 'not_your_turn';
   if (state.players[seat]!.out) return 'player_out';
@@ -53,7 +53,7 @@ export function validateMove(state: GameState, seat: number, move: Move): MoveEr
  * achievable top card appears at least once, which is all beating, bots, and
  * highlighting need; exact card selections are validated by `validateMove`.
  */
-export function legalMoves(state: GameState, seat: number): Move[] {
+export function legalMoves(state: RulesState, seat: number): Move[] {
   if (!canAct(state, seat)) return [];
   const hand = state.players[seat]!.hand;
   const top = currentRequirement(state);

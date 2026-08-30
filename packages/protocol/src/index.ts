@@ -8,7 +8,7 @@ import type { Action, GameState } from '@thirteen/engine';
  * recipient: the recipient is display seat 0, opponents' hands are replaced
  * by `handCount`, and `seq` is the room's global action counter.
  */
-export interface SeatView extends GameState {
+export interface SeatView extends Omit<GameState, 'players' | 'rngState'> {
 	/** Count of cards for seats whose `hand` is hidden (empty array in the view). */
 	players: (GameState['players'][number] & { handCount: number })[];
 }
@@ -50,13 +50,26 @@ export interface ClientLeave {
 	t: 'leave';
 }
 
+export interface ClientChat {
+	t: 'chat';
+	/** Free-form message to everyone in the room; server clamps length. */
+	text: string;
+}
+
+/** Keepalive; the server answers with `pong`. */
+export interface ClientPing {
+	t: 'ping';
+}
+
 export type ClientMessage =
 	| ClientCreate
 	| ClientJoin
 	| ClientStart
 	| ClientAction
 	| ClientNextHand
-	| ClientLeave;
+	| ClientChat
+	| ClientLeave
+	| ClientPing;
 
 /** Full snapshot for one seat (or a lobby). */
 export interface ServerLobby {
@@ -101,8 +114,18 @@ export interface ServerError {
 	on: number;
 }
 
+/** One chat message, already rotated for the recipient. */
+export interface ServerChat {
+	t: 'chat';
+	/** Sender's display seat (recipient = 0). */
+	seat: number;
+	/** Sender's name at send time (seat may since have been renamed/botted). */
+	name: string;
+	text: string;
+}
+
 export interface ServerPong {
 	t: 'pong';
 }
 
-export type ServerMessage = ServerLobby | ServerState | ServerEvent | ServerError | ServerPong;
+export type ServerMessage = ServerLobby | ServerState | ServerEvent | ServerChat | ServerError | ServerPong;

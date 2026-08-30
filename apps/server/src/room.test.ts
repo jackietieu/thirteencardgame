@@ -316,4 +316,101 @@ describe('room', () => {
 		// Reload: same sid, no password — reclaims the seat instead of erroring.
 		expect(room.join('Ben', 'sid-b', good)).toBe(1);
 	});
+
+
+	it('broadcasts chat to connected humans with rotated seats and sender name', async () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		await room.chat(seats[1]!, 'gl hf');
+		expect(seats[0]!.last).toMatchObject({ t: 'chat', seat: 1, name: 'P1', text: 'gl hf' });
+		expect(seats[1]!.last).toMatchObject({ t: 'chat', seat: 0, name: 'P1', text: 'gl hf' });
+		expect(seats[3]!.last).toMatchObject({ t: 'chat', seat: 2, name: 'P1', text: 'gl hf' });
+	});
+
+	it('clamps long messages and drops empty ones', async () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		await room.chat(seats[0]!, '   ');
+		await room.chat(seats[0]!, 'x'.repeat(400));
+		const chats = seats[1]!.sent.filter((m) => m.t === 'chat');
+		expect(chats).toHaveLength(1);
+		expect(chats[0]!.t === 'chat' && chats[0]!.text).toHaveLength(280);
+	});
+
+	it('flood guard drops messages past 5 per 10s per seat', async () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		for (let i = 0; i < 5; i++) await room.chat(seats[0]!, `m${i}`);
+		await room.chat(seats[0]!, 'dropped');
+		await room.chat(seats[1]!, 'other seat unaffected');
+		const chats = seats[2]!.sent.filter((m) => m.t === 'chat');
+		expect(chats).toHaveLength(6); // m0..m4 broadcast, 'dropped' did not
+		expect(chats[5]!.t === 'chat' && chats[5]!.text).toBe('other seat unaffected');
+		vi.advanceTimersByTime(10_001);
+		await room.chat(seats[0]!, 'after window');
+		expect(seats[2]!.last).toMatchObject({ t: 'chat', text: 'after window' });
+	});
+
+	it('blocks moderated chat and only tells the sender', async () => {
+		const room = new Room({
+			code: 'TEST',
+			seed: 42,
+			moderate: async (text) => text !== 'banned'
+		});
+		const seats = joinFour(room);
+		await room.chat(seats[0]!, 'banned');
+		expect(seats[0]!.last).toMatchObject({ t: 'error', code: 'chat_blocked' });
+		expect(seats[1]!.sent.filter((m) => m.t === 'chat')).toHaveLength(0);
+		// Blocked messages do not enter history.
+		const back = new FakeConn();
+		room.join('P0', 'sid-0', back);
+		expect(back.sent.filter((m) => m.t === 'chat')).toHaveLength(0);
+	});
+
+	it('replays chat history to a reconnecting seat, rotated for them', async () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		await room.chat(seats[0]!, 'from seat 0');
+		await room.chat(seats[2]!, 'from seat 2');
+		const back = new FakeConn();
+		room.join('P0', 'sid-0', back); // sid reclaim after a drop
+		const chats = back.sent.filter((m) => m.t === 'chat');
+		expect(chats).toHaveLength(2);
+		expect(chats[0]).toMatchObject({ t: 'chat', seat: 0, name: 'P0', text: 'from seat 0' });
+		expect(chats[1]).toMatchObject({ t: 'chat', seat: 2, name: 'P2', text: 'from seat 2' });
+	});
+
+	it('chat from an unseated connection errors and is never moderated', async () => {
+		const room = new Room({ code: 'TEST', seed: 42, moderate: async () => false });
+		const stranger = new FakeConn();
+		await room.chat(stranger, 'hi');
+		expect(stranger.last).toMatchObject({ t: 'error', code: 'not_joined' });
+	});
+
+	it('history is capped at the last 50 messages', async () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		for (let i = 0; i < 55; i++) {
+			await room.chat(seats[0]!, `m${i}`);
+			vi.advanceTimersByTime(2500); // stay under the flood guard
+		}
+		const back = new FakeConn();
+		room.join('P0', 'sid-0', back);
+		const chats = back.sent.filter((m) => m.t === 'chat');
+		expect(chats).toHaveLength(50);
+		expect(chats[0]).toMatchObject({ text: 'm5' });
+		expect(chats[49]).toMatchObject({ text: 'm54' });
+	});
+
+	it('late joiner receives chat history on first join', async () => {
+		const room = makeRoom();
+		const host = new FakeConn();
+		room.join('P0', 'sid-0', host);
+		await room.chat(host, 'welcome');
+		const second = new FakeConn();
+		room.join('P1', 'sid-1', second);
+		const chats = second.sent.filter((m) => m.t === 'chat');
+		expect(chats).toHaveLength(1);
+		expect(chats[0]).toMatchObject({ seat: 3, name: 'P0', text: 'welcome' }); // rotated
+	});
 });

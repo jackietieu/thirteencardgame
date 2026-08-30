@@ -3,6 +3,9 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { ClientMessage, ServerMessage } from '@thirteen/protocol';
 import { Room, RoomError, makeRoomCode, type SeatConn } from './room.js';
 import { deleteRoomState } from './db.js';
+import { loadEnvLocal } from './env.js';
+
+loadEnvLocal();
 
 export interface ServerHandle {
 	port: number;
@@ -43,6 +46,10 @@ function serveSocket(ws: WebSocket, rooms: Map<string, Room>) {
 					return room.action(conn, msg.seq, msg.action);
 				case 'nextHand':
 					return room.nextHand(conn);
+				case 'chat':
+					return room.chat(conn, msg.text);
+				case 'ping':
+					return send({ t: 'pong' });
 				case 'leave':
 					return room.leave(conn);
 				default:

@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Avatar from './Avatar.svelte';
+	import CardBack from './CardBack.svelte';
+
 	interface Props {
 		name: string;
 		position: 'left' | 'top' | 'right';
@@ -8,38 +11,107 @@
 		out: boolean;
 	}
 
-	let { name, position = 'left', cardCount, isTurn, passed, out }: Props = $props();
+	let { name, position, cardCount, isTurn, passed, out }: Props = $props();
 
 	const shownBacks = $derived(Math.min(cardCount, 13));
+	const posClass = $derived(position === 'top' ? 'pod-n' : position === 'left' ? 'pod-w' : 'pod-e');
 </script>
 
-<div
-	data-seat={name}
-	class="flex items-center gap-2 rounded-xl border px-2.5 py-1.5 transition-colors
-		{position === 'top' ? 'flex-row' : ''}
-		{isTurn ? 'border-amber-400/90 bg-emerald-800/70 shadow-[0_0_12px_rgb(251_191_36/0.25)]' : 'border-emerald-800/60 bg-emerald-900/50'}
-		{out ? 'opacity-50' : ''}"
->
-	<div class="flex" aria-hidden="true">
-		{#each Array(shownBacks) as _, i (i)}
-			<span class="card-back {i > 0 ? '-ml-5' : ''}"></span>
-		{/each}
-	</div>
-	<div class="min-w-20">
-		<div class="flex items-center gap-1.5 text-sm font-semibold">
-			<span>{name}</span>
-			<span class="rounded-full bg-emerald-950/70 px-1.5 py-0.5 text-xs font-normal text-emerald-200">
-				{cardCount} card{cardCount === 1 ? '' : 's'}
+<div data-seat={name} class="pod {posClass} {out ? 'pod-out' : ''}">
+	<div class="pod-card {isTurn ? 'pod-turn pulse-turn' : ''}">
+		<Avatar {name} dim={out} />
+		<div class="pod-info">
+			<span class="pod-name">{name}</span>
+			<span class="pod-meta">
+				<span class="pod-count">{cardCount} card{cardCount === 1 ? '' : 's'}</span>
+				{#if out}
+					<span class="chip chip-out">OUT</span>
+				{:else if passed}
+					<span class="chip chip-pass">PASSED</span>
+				{:else if isTurn}
+					<span class="chip chip-think pulse-dot">Thinking…</span>
+				{/if}
 			</span>
 		</div>
-		<div class="text-xs text-emerald-300/90">
-			{#if out}
-				Out
-			{:else if passed}
-				Passed
-			{:else if isTurn}
-				Thinking…
-			{/if}
-		</div>
+		{#if !out}
+			<div class="pod-backs" aria-hidden="true">
+				{#each Array(shownBacks) as _, i (i)}
+					<CardBack class={i > 0 ? 'back-overlap' : ''} />
+				{/each}
+			</div>
+		{/if}
 	</div>
 </div>
+
+<style>
+	.pod-card {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: color-mix(in oklab, var(--color-surface) 84%, transparent);
+		backdrop-filter: blur(8px);
+		border: 1px solid var(--color-hairline);
+		border-radius: var(--radius-pod);
+		padding: 0.4rem 0.65rem;
+		box-shadow: var(--shadow-pod);
+		transition: border-color var(--dur-base);
+	}
+	.pod-turn {
+		border-color: var(--color-gold);
+	}
+	.pod-out {
+		opacity: 0.5;
+	}
+	.pod-info {
+		display: flex;
+		flex-direction: column;
+		line-height: 1.25;
+		min-width: 0;
+	}
+	.pod-name {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--color-ink);
+		max-width: 8rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.pod-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.pod-count {
+		font-size: 0.6875rem;
+		color: var(--color-ink-subtle);
+		font-variant-numeric: tabular-nums;
+	}
+	.chip {
+		font-size: 0.5625rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		border-radius: 999px;
+		padding: 0.1rem 0.4rem;
+	}
+	.chip-out {
+		color: var(--color-accent);
+		background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	}
+	.chip-think {
+		color: var(--color-ink-muted);
+		background: var(--color-surface-raised);
+	}
+	.pod-backs {
+		display: flex;
+		--back-w: calc(var(--card-w) * 0.32);
+	}
+	.pod-backs :global(.cback + .cback) {
+		margin-left: calc(var(--back-w) * -0.72);
+	}
+	@media (max-width: 700px) {
+		.pod-backs {
+			display: none;
+		}
+	}
+</style>

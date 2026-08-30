@@ -1,41 +1,498 @@
 @import 'tailwindcss';
 
+/* Self-hosted display face (latin + latin-ext for Vietnamese diacritics). */
+@font-face {
+	font-family: 'Outfit';
+	font-style: normal;
+	font-weight: 500 700;
+	font-display: swap;
+	src: url('/fonts/outfit-latin-ext.woff2') format('woff2');
+	unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+		U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+		U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+	font-family: 'Outfit';
+	font-style: normal;
+	font-weight: 500 700;
+	font-display: swap;
+	src: url('/fonts/outfit-latin.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+		U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@theme {
+	/* chrome */
+	--color-bg: oklch(0.17 0.022 168);
+	--color-surface: oklch(0.235 0.028 168);
+	--color-surface-raised: oklch(0.285 0.032 168);
+	--color-hairline: oklch(0.345 0.03 168);
+
+	/* table */
+	--color-felt: oklch(0.375 0.085 158);
+	--color-felt-deep: oklch(0.315 0.075 158);
+	--color-felt-rim: oklch(0.245 0.055 160);
+
+	/* text */
+	--color-ink: oklch(0.975 0.008 160);
+	--color-ink-muted: oklch(0.845 0.045 165);
+	--color-ink-subtle: oklch(0.715 0.038 165);
+
+	/* semantic */
+	--color-accent: oklch(0.8 0.15 164);
+	--color-accent-ink: oklch(0.205 0.04 168);
+	--color-gold: oklch(0.855 0.145 88);
+	--color-danger: oklch(0.735 0.175 22);
+	--color-focus: oklch(0.83 0.12 230);
+
+	/* cards */
+	--color-card-face: oklch(0.985 0.005 95);
+	--color-card-red: oklch(0.505 0.205 26);
+	--color-card-black: oklch(0.245 0.02 250);
+	--color-card-back: oklch(0.6 0.085 262);
+	--color-card-back-ink: oklch(0.76 0.06 262);
+
+	--font-display: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+	--radius-pod: 0.875rem;
+	--radius-panel: 1.25rem;
+
+	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 10px rgb(0 0 0 / 0.28);
+	--shadow-card-lift: 0 2px 4px rgb(0 0 0 / 0.32), 0 12px 26px rgb(0 0 0 / 0.42);
+	--shadow-felt: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 32px 70px rgb(0 0 0 / 0.55);
+	--shadow-pod: 0 2px 8px rgb(0 0 0 / 0.35);
+
+	--ease-card: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-snap: cubic-bezier(0.34, 1.4, 0.64, 1);
+	--dur-fast: 120ms;
+	--dur-base: 200ms;
+	--dur-slow: 340ms;
+	--dur-sweep: 520ms;
+}
+
+html {
+	background: var(--color-bg);
+}
+
 body {
-	@apply bg-emerald-950 text-neutral-100 antialiased;
+	@apply bg-bg font-sans text-ink antialiased;
+	overscroll-behavior: none;
 }
 
-/* Opponent card backs — CSS pattern, no image assets. */
-.card-back {
-	display: inline-block;
-	width: 1.6rem;
-	height: 2.3rem;
-	border-radius: 0.3rem;
-	border: 1px solid rgb(255 255 255 / 0.25);
-	background-color: #1e3a5f;
-	background-image: repeating-linear-gradient(
-		45deg,
-		rgb(255 255 255 / 0.12) 0 2px,
-		transparent 2px 6px
-	);
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
 }
 
-/* Compact card label used in the trick pile and last-trick summary. */
-.mini-card {
+/* ------------------------------------------------------------------ */
+/* Shell: non-scrolling three-row grid (rail / table / dock).          */
+/* ------------------------------------------------------------------ */
+.shell {
+	height: 100dvh;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	overflow: hidden;
+	padding-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right));
+}
+
+/* Card geometry — computed, see DESIGN.md §4.4. */
+.shell {
+	--card-h: clamp(66px, 15.5dvh, 118px);
+	--card-w: calc(var(--card-h) / 1.4);
+	--fan-strip: clamp(26px, calc((100dvw - 3rem - var(--card-w)) / 12), calc(var(--card-w) * 0.62));
+	--table-card-w: clamp(40px, calc(var(--card-h) * 0.62), 92px);
+}
+@media (orientation: portrait) {
+	.shell {
+		--card-w: clamp(40px, min(calc((100dvw - 2rem) / 4.6), calc((100dvh - 262px) / 2.8)), 76px);
+		--card-h: calc(var(--card-w) * 1.4);
+		--fan-strip: calc(var(--card-w) * 0.6);
+		--table-card-w: clamp(34px, calc(var(--card-w) * 0.72), 60px);
+	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Rail (top bar).                                                     */
+/* ------------------------------------------------------------------ */
+.rail {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-height: 3rem;
+	padding-block: 0.25rem;
+}
+@media (max-height: 420px) {
+	.rail {
+		min-height: 2.5rem;
+	}
+	.rail-word {
+		display: none;
+	}
+}
+.rail-word {
+	font-family: var(--font-display);
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	font-size: 1.05rem;
+}
+.rail-hand {
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--color-ink-muted);
+	background: var(--color-surface);
+	border: 1px solid var(--color-hairline);
+	border-radius: 999px;
+	padding: 0.2rem 0.6rem;
+	font-variant-numeric: tabular-nums;
+}
+.score-chip {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	line-height: 1.1;
+	padding: 0.15rem 0.6rem;
+	border-radius: 0.6rem;
+	background: var(--color-surface);
+	border: 1px solid transparent;
+	border-left: 2px solid transparent;
+	font-variant-numeric: tabular-nums;
+}
+.score-chip .score-name {
+	font-size: 0.6875rem;
+	color: var(--color-ink-subtle);
+	font-weight: 600;
+}
+.score-chip .score-num {
+	font-family: var(--font-display);
+	font-size: 1.05rem;
+	font-weight: 600;
+	color: var(--color-ink);
+}
+.score-chip.chip-turn {
+	border-left-color: var(--color-gold);
+}
+.score-chip.chip-done .score-num {
+	color: var(--color-accent);
+}
+.icon-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 2.1rem;
-	height: 2.95rem;
-	border-radius: 0.35rem;
-	border: 1px solid rgb(0 0 0 / 0.15);
-	background: white;
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
-	font-size: 0.7rem;
-	font-weight: 700;
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: 0.75rem;
+	color: var(--color-ink-muted);
+	transition:
+		background var(--dur-fast),
+		color var(--dur-fast);
+}
+.icon-btn:hover {
+	background: var(--color-surface);
+	color: var(--color-ink);
 }
 
-/* Rejected-play shake. Retriggered by remounting via {#key}. */
+/* ------------------------------------------------------------------ */
+/* Table + felt.                                                       */
+.fan-row .fan-slot + .fan-slot {
+	margin-left: calc(var(--fan-strip) - var(--card-w));
+}
+.table {
+	position: relative;
+	container-type: size;
+	min-height: 0;
+}
+.felt {
+	position: absolute;
+	inset: 3% 3.5%;
+	border-radius: 44% / 52%;
+	background: radial-gradient(120% 90% at 50% 42%, var(--color-felt) 0%, var(--color-felt-deep) 72%);
+	box-shadow:
+		var(--shadow-felt),
+		0 0 0 clamp(6px, 1.1cqw, 14px) var(--color-felt-rim);
+}
+.nav-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.75rem;
+	padding: 0 0.6rem;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--color-ink-muted);
+	border-radius: 0.75rem;
+	transition:
+		color var(--dur-fast),
+		background var(--dur-fast);
+}
+.nav-link:hover {
+	color: var(--color-ink);
+	background: var(--color-surface);
+}
+.deal-panel {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+}
+.deal-label {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--color-ink-muted);
+	font-variant-numeric: tabular-nums;
+}
+.pod.pod-n {
+	left: 50%;
+	top: 5%;
+}
+.pod.pod-w {
+	left: 2%;
+	top: 50%;
+	transform: translateY(-50%);
+}
+.pod.pod-e {
+	left: auto;
+	right: 2%;
+	top: 50%;
+	transform: translateY(-50%);
+}
+@media (orientation: portrait) {
+	.felt {
+		border-radius: 46% / 40%;
+		inset: 2% 4%;
+	}
+}
+.felt::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+	opacity: 0.05;
+	mix-blend-mode: overlay;
+	pointer-events: none;
+}
+.play-zone {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	width: min(64cqw, 52cqh);
+	height: min(64cqw, 52cqh);
+}
+@media (orientation: portrait) {
+	.play-zone {
+		width: min(86cqw, 46cqh);
+		height: min(86cqw, 46cqh);
+	}
+}
+
+/* Seat pods on the felt rim. */
+.pod {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	z-index: 20;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dock (bottom): prompt / actions / hand.                             */
+/* ------------------------------------------------------------------ */
+.dock {
+	display: grid;
+	grid-template-areas:
+		'prompt'
+		'actions'
+		'hand';
+	row-gap: 0.15rem;
+	padding-bottom: calc(0.4rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 900px) {
+	.dock {
+		grid-template-areas:
+			'prompt prompt'
+			'hand actions';
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: end;
+		column-gap: 2rem;
+	}
+}
+.dock-prompt {
+	grid-area: prompt;
+	display: flex;
+	justify-content: center;
+}
+.dock-actions {
+	grid-area: actions;
+	justify-self: center;
+}
+@media (min-width: 900px) {
+	.dock-actions {
+		justify-self: end;
+	}
+}
+.dock-hand {
+	grid-area: hand;
+	min-width: 0;
+}
+
+/* Hand fan rows. */
+[data-hand] {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	row-gap: 0.4rem;
+	padding-top: 1.4rem;
+	padding-bottom: 1.1rem;
+	min-height: calc(var(--card-h) + 2.5rem);
+}
+.fan-row {
+	display: flex;
+	justify-content: center;
+	align-items: flex-end;
+}
+
+/* ------------------------------------------------------------------ */
+/* Buttons, chips, inputs.                                             */
+/* ------------------------------------------------------------------ */
+.btn-primary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-height: 3rem;
+	min-width: 7rem;
+	padding: 0 1.5rem;
+	border-radius: var(--radius-pod);
+	background: var(--color-accent);
+	color: var(--color-accent-ink);
+	font-family: var(--font-display);
+	font-weight: 600;
+	font-size: 1rem;
+	box-shadow: var(--shadow-pod);
+	transition:
+		transform var(--dur-fast) var(--ease-card),
+		filter var(--dur-fast);
+}
+.btn-primary:hover:not(:disabled) {
+	filter: brightness(1.08);
+	transform: translateY(-1px);
+}
+.btn-primary:disabled {
+	background: var(--color-surface-raised);
+	color: var(--color-ink-subtle);
+	box-shadow: none;
+	cursor: not-allowed;
+}
+.btn-ghost {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-height: 3rem;
+	min-width: 6rem;
+	padding: 0 1.25rem;
+	border-radius: var(--radius-pod);
+	border: 1px solid var(--color-hairline);
+	color: var(--color-ink);
+	font-family: var(--font-display);
+	font-weight: 600;
+	font-size: 1rem;
+	transition:
+		background var(--dur-fast),
+		transform var(--dur-fast) var(--ease-card);
+}
+.btn-ghost:hover:not(:disabled) {
+	background: var(--color-surface);
+	transform: translateY(-1px);
+}
+.btn-ghost:disabled {
+	color: var(--color-ink-subtle);
+	cursor: not-allowed;
+}
+.btn-ghost kbd,
+.btn-primary kbd {
+	font-family: var(--font-sans);
+	font-size: 0.6875rem;
+	font-weight: 600;
+	opacity: 0.65;
+	border: 1px solid currentColor;
+	border-radius: 0.3rem;
+	padding: 0 0.3rem;
+}
+.btn-sm {
+	min-height: 2.75rem;
+	min-width: 0;
+	padding: 0 1rem;
+	font-size: 0.875rem;
+}
+
+.reason-pill {
+	background: color-mix(in oklab, var(--color-felt-deep) 78%, transparent);
+	color: var(--color-gold);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	border-radius: 999px;
+	padding: 0.3rem 0.9rem;
+}
+
+/* Toggle switch (auto-pass). */
+.switch {
+	position: relative;
+	width: 2.5rem;
+	height: 1.375rem;
+	border-radius: 999px;
+	background: var(--color-surface-raised);
+	border: 1px solid var(--color-hairline);
+	transition: background var(--dur-fast);
+	flex-shrink: 0;
+}
+.switch::after {
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 1.05rem;
+	height: 1.05rem;
+	border-radius: 50%;
+	background: var(--color-ink-muted);
+	transition:
+		transform var(--dur-base) var(--ease-card),
+		background var(--dur-fast);
+}
+.switch[aria-checked='true'] {
+	background: var(--color-accent);
+	border-color: var(--color-accent);
+}
+.switch[aria-checked='true']::after {
+	transform: translateX(1.05rem);
+	background: var(--color-accent-ink);
+}
+
+.field-input {
+	width: 100%;
+	min-height: 3rem;
+	border-radius: 0.75rem;
+	border: 1px solid var(--color-hairline);
+	background: var(--color-surface);
+	color: var(--color-ink);
+	padding: 0 0.875rem;
+	font-size: 0.9375rem;
+	outline: none;
+	transition: border-color var(--dur-fast);
+}
+.field-input:focus {
+	border-color: var(--color-focus);
+}
+.field-input::placeholder {
+	color: var(--color-ink-subtle);
+}
+
+/* ------------------------------------------------------------------ */
+/* Animations.                                                         */
+/* ------------------------------------------------------------------ */
 @keyframes shake {
 	0%,
 	100% {
@@ -54,32 +511,178 @@ body {
 		transform: translateX(0.25rem);
 	}
 }
-
 .shake {
 	animation: shake 0.35s ease;
 }
 
-/* One-by-one dealing animation: card backs fly from the table center to each
-   card's real destination — seat hands for bots, hand slots for the human.
-   Targets are measured at deal start and passed as --dx/--dy pixel offsets. */
+@keyframes pulse-gold {
+	0%,
+	100% {
+		box-shadow:
+			0 0 0 1.5px var(--color-gold),
+			0 0 0 0 rgb(247 201 80 / 0.35);
+	}
+	50% {
+		box-shadow:
+			0 0 0 1.5px var(--color-gold),
+			0 0 0 7px rgb(247 201 80 / 0);
+	}
+}
+.pulse-turn {
+	animation: pulse-gold 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+.pulse-dot {
+	animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* Deal flight: card backs arc from table center to measured targets. */
 .deal-card {
 	position: absolute;
 	left: 50%;
 	top: 50%;
 	opacity: 0;
-	animation: deal-to-target 0.4s ease-out forwards;
+	animation: deal-to-target var(--dur-slow) var(--ease-card) forwards;
+}
+@keyframes deal-to-target {
+	0% {
+		opacity: 0;
+		transform: translate(-50%, -50%) rotate(-14deg) scale(0.9);
+	}
+	20% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 1;
+		transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) rotate(0deg)
+			scale(1);
+	}
 }
 
-@keyframes deal-to-target {
+/* Plays entering the felt from their seat's direction. */
+@keyframes enter-n {
 	from {
-		opacity: 1;
-		transform: translate(-50%, -50%) rotate(-8deg);
+		opacity: 0;
+		transform: translateY(-2.5rem) scale(0.85);
 	}
 	to {
 		opacity: 1;
-		transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) rotate(0deg);
+		transform: none;
 	}
 }
+@keyframes enter-s {
+	from {
+		opacity: 0;
+		transform: translateY(2.5rem) scale(0.85);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes enter-w {
+	from {
+		opacity: 0;
+		transform: translateX(-2.5rem) scale(0.85);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes enter-e {
+	from {
+		opacity: 0;
+		transform: translateX(2.5rem) scale(0.85);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+.enter-0 {
+	animation: enter-s var(--dur-base) var(--ease-card);
+}
+.enter-1 {
+	animation: enter-w var(--dur-base) var(--ease-card);
+}
+.enter-2 {
+	animation: enter-n var(--dur-base) var(--ease-card);
+}
+.enter-3 {
+	animation: enter-e var(--dur-base) var(--ease-card);
+}
+
+/* Trick sweep: winning group slides toward the winner's pod. */
+@keyframes sweep-0 {
+	to {
+		opacity: 0;
+		transform: translateY(45%) scale(0.7);
+	}
+}
+@keyframes sweep-1 {
+	to {
+		opacity: 0;
+		transform: translateX(-45%) scale(0.7);
+	}
+}
+@keyframes sweep-2 {
+	to {
+		opacity: 0;
+		transform: translateY(-45%) scale(0.7);
+	}
+}
+@keyframes sweep-3 {
+	to {
+		opacity: 0;
+		transform: translateX(45%) scale(0.7);
+	}
+}
+.sweep-0 {
+	animation: sweep-0 var(--dur-sweep) var(--ease-card) forwards;
+}
+.sweep-1 {
+	animation: sweep-1 var(--dur-sweep) var(--ease-card) forwards;
+}
+.sweep-2 {
+	animation: sweep-2 var(--dur-sweep) var(--ease-card) forwards;
+}
+.sweep-3 {
+	animation: sweep-3 var(--dur-sweep) var(--ease-card) forwards;
+}
+
+/* Bomb flash behind the play zone. */
+@keyframes bomb-flash {
+	0% {
+		opacity: 0;
+		transform: scale(0.6);
+	}
+	25% {
+		opacity: 0.85;
+	}
+	100% {
+		opacity: 0;
+		transform: scale(1.5);
+	}
+}
+.bomb-flash {
+	position: absolute;
+	inset: 12%;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgb(247 201 80 / 0.5) 0%, rgb(247 201 80 / 0) 65%);
+	animation: bomb-flash 0.7s var(--ease-card) forwards;
+	pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
@@ -89,27 +692,36 @@ body {
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}
+	.pulse-turn,
+	.pulse-dot {
+		animation: none !important;
+	}
 }
 
-/* /rules page prose styling (Tailwind typography plugin not installed). */
+/* ------------------------------------------------------------------ */
+/* /rules prose.                                                       */
+/* ------------------------------------------------------------------ */
 .rules {
-	max-width: 46rem;
+	max-width: 62ch;
 	margin-inline: auto;
 	line-height: 1.7;
 	font-size: 0.95rem;
-	color: rgb(231 245 255 / 0.92);
+	color: var(--color-ink-muted);
 }
 .rules h1 {
+	font-family: var(--font-display);
 	font-size: 1.9rem;
 	font-weight: 700;
 	margin: 1.5rem 0 1rem;
-	color: white;
+	color: var(--color-ink);
 }
 .rules h2 {
+	font-family: var(--font-display);
 	font-size: 1.35rem;
 	font-weight: 700;
 	margin: 2rem 0 0.75rem;
-	color: rgb(167 243 208);
+	color: var(--color-accent);
+	scroll-margin-top: 4rem;
 }
 .rules p {
 	margin: 0.75rem 0;
@@ -123,48 +735,41 @@ body {
 	margin: 0.35rem 0;
 }
 .rules strong {
-	color: white;
+	color: var(--color-ink);
 }
 .rules code {
-	background: rgb(0 0 0 / 0.35);
+	background: var(--color-surface-raised);
 	border-radius: 0.3rem;
 	padding: 0.1rem 0.35rem;
 	font-size: 0.85em;
+	color: var(--color-ink);
 }
-
-/* Landscape prompt: shown on portrait-orientation phones. */
-.rotate-overlay {
+.rules-nav {
+	position: sticky;
+	top: 0;
+	z-index: 10;
 	display: none;
+	gap: 0.25rem;
+	flex-direction: column;
+	max-height: 100dvh;
+	overflow-y: auto;
+	padding: 1rem 0.5rem;
+	font-size: 0.8125rem;
 }
-
-@media (orientation: portrait) and (max-width: 920px) {
-	.rotate-overlay {
+@media (min-width: 1024px) {
+	.rules-nav {
 		display: flex;
-		position: fixed;
-		inset: 0;
-		z-index: 100;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 1rem;
-		background: #064e3b;
-		color: #f0fdf4;
-		text-align: center;
-		padding: 2rem;
-		font-size: 1.05rem;
-		font-weight: 600;
 	}
 }
-
-.rotate-icon {
-	width: 3rem;
-	height: 3rem;
+.rules-nav a {
+	color: var(--color-ink-subtle);
+	padding: 0.2rem 0.6rem;
+	border-left: 2px solid var(--color-hairline);
+	transition:
+		color var(--dur-fast),
+		border-color var(--dur-fast);
 }
-
-/* Mobile: avoid double-tap zoom delays on cards and buttons. */
-button,
-.play-card,
-.card-back {
-	touch-action: manipulation;
-	-webkit-tap-highlight-color: transparent;
+.rules-nav a:hover {
+	color: var(--color-ink);
+	border-color: var(--color-accent);
 }

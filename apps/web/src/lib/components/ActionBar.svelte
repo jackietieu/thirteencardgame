@@ -3,6 +3,8 @@
 		canPlay: boolean;
 		canPass: boolean;
 		reason: string | null;
+		/** Classified name of the current selection, or why it is not a combo. */
+		summary: string | null;
 		autoPass: boolean;
 		onPlay: () => void;
 		onPass: () => void;
@@ -10,47 +12,73 @@
 		shakeKey: number;
 	}
 
-	let { canPlay, canPass, reason, autoPass, onPlay, onPass, onToggleAutoPass, shakeKey }: Props =
+	let { canPlay, canPass, reason, summary, autoPass, onPlay, onPass, onToggleAutoPass, shakeKey }: Props =
 		$props();
 </script>
 
-<div class="flex flex-col items-center gap-2">
-	<div class="flex items-center gap-3">
+<div class="flex flex-col items-center gap-1.5">
+	{#if summary}
+		<span class="combo-chip">{summary}</span>
+	{/if}
+	<div class="flex items-center gap-2">
 		<button
 			type="button"
 			data-testid="play-button"
 			disabled={!canPlay}
 			onclick={onPlay}
-			class="rounded-xl bg-emerald-500 px-6 py-2.5 font-semibold text-emerald-950 shadow transition
-				hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-500"
+			class="btn-primary"
 		>
-			Play
+			Play <kbd>↵</kbd>
 		</button>
 		<button
 			type="button"
 			data-testid="pass-button"
 			disabled={!canPass}
 			onclick={onPass}
-			class="rounded-xl border border-emerald-600/70 px-6 py-2.5 font-semibold text-emerald-100 shadow transition
-				hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-40"
+			class="btn-ghost"
 		>
-			Pass
+			Pass <kbd>P</kbd>
 		</button>
 	</div>
 
 	{#if reason}
 		{#key shakeKey}
-			<p data-testid="play-reason" class="shake text-sm text-red-300">{reason}</p>
+			<p data-testid="play-reason" class="reason-pill shake">{reason}</p>
 		{/key}
 	{/if}
 
-	<label class="flex items-center gap-2 text-xs text-emerald-300">
-		<input
-			type="checkbox"
-			checked={autoPass}
-			onchange={(e) => onToggleAutoPass(e.currentTarget.checked)}
-			class="accent-emerald-500"
-		/>
-		Auto-pass when stuck
-	</label>
+	<button
+		type="button"
+		role="switch"
+		aria-checked={autoPass}
+		class="auto-row"
+		onclick={() => onToggleAutoPass(!autoPass)}
+	>
+		<span class="switch" aria-checked={autoPass} aria-hidden="true"></span>
+		<span>Auto-pass when stuck</span>
+	</button>
 </div>
+
+<style>
+	.combo-chip {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+		background: var(--color-surface);
+		border: 1px solid var(--color-hairline);
+		border-radius: 999px;
+		padding: 0.15rem 0.7rem;
+	}
+	.auto-row {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 2rem;
+		font-size: 0.75rem;
+		color: var(--color-ink-muted);
+		transition: color var(--dur-fast);
+	}
+	.auto-row:hover {
+		color: var(--color-ink);
+	}
+</style>

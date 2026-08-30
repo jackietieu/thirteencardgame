@@ -8,22 +8,27 @@
 		type Card,
 		type Move
 	} from '@thirteen/engine';
+	import type { Snippet } from 'svelte';
 	import { DEAL_INTERVAL_FAST_MS, DEAL_INTERVAL_MS } from '$lib/game.svelte';
 	import type { GameDriver } from '$lib/driver';
 	import { cardKey, participatingCards } from '$lib/highlight';
 	import ActionBar from '$lib/components/ActionBar.svelte';
+	import CardBack from '$lib/components/CardBack.svelte';
+	import Felt from '$lib/components/Felt.svelte';
 	import Hand from '$lib/components/Hand.svelte';
 	import LogDrawer from '$lib/components/LogDrawer.svelte';
-	import Scoreboard from '$lib/components/Scoreboard.svelte';
+	import PlacingsPanel from '$lib/components/PlacingsPanel.svelte';
+	import Rail from '$lib/components/Rail.svelte';
 	import Seat from '$lib/components/Seat.svelte';
 	import TrickPile from '$lib/components/TrickPile.svelte';
 	import TurnBanner from '$lib/components/TurnBanner.svelte';
 
 	interface Props {
 		store: GameDriver;
+		nav?: Snippet;
 	}
 
-	let { store }: Props = $props();
+	let { store, nav }: Props = $props();
 
 	let selected = $state<Set<string>>(new Set());
 
@@ -67,6 +72,12 @@
 			validateMove(store.state, 0, selectedMove) === null
 	);
 	const canPass = $derived(store.state !== null && engineCanPass(store.state, 0) && interacting);
+
+	const summary = $derived.by(() => {
+		if (selected.size === 0) return null;
+		if (selectedMove === null) return 'Not a valid combination';
+		return describeMove(selectedMove);
+	});
 
 	const reason = $derived.by(() => {
 		if (!store.myTurn || selected.size === 0) return null;
@@ -112,7 +123,7 @@
 	let dealTargets = $state<{ dx: number; dy: number }[]>([]);
 
 	// Measure real destinations when a deal starts: bots' cards fly to their seat
-	// hand; the human's cards fly to their exact final hand slot positions.
+	// pod; the human's cards fly to each card's actual slot in the fan.
 	$effect(() => {
 		if (!store.dealing) {
 			if (dealTargets.length > 0) dealTargets = [];
@@ -122,16 +133,15 @@
 		const w = tableEl.getBoundingClientRect();
 		const cx = w.left + w.width / 2;
 		const cy = w.top + w.height / 2;
+		const handCards = handAreaEl?.querySelectorAll('.play-card') ?? [];
 		const targets: { dx: number; dy: number }[] = [];
 		for (let i = 0; i < 52; i++) {
 			const seat = i % 4;
 			if (seat === 0) {
-				const hr = handAreaEl?.getBoundingClientRect();
-				if (hr && hr.width > 0) {
-					const j = i / 4;
-					const tx = hr.left + ((j + 0.5) * hr.width) / 13;
-					const ty = hr.top + hr.height / 2;
-					targets.push({ dx: tx - cx, dy: ty - cy });
+				const el = handCards[i / 4];
+				if (el) {
+					const r = el.getBoundingClientRect();
+					targets.push({ dx: r.left + r.width / 2 - cx, dy: r.top + r.height / 2 - cy });
 				} else {
 					targets.push({ dx: 0, dy: w.height / 2 - 30 });
 				}
@@ -177,7 +187,7 @@
 
 	function onKeydown(event: KeyboardEvent) {
 		const target = event.target;
-		if (target instanceof HTMLInputElement && target.type !== 'checkbox' && event.key !== 'Enter') {
+		if (target instanceof HTMLInputElement && target.type !== 'checkbox') {
 			return;
 		}
 		if (event.key === 'Enter') {
@@ -190,46 +200,40 @@
 			}
 		}
 	}
+
 </script>
+
+{#snippet railRight()}
+	{@render nav?.()}
+	<LogDrawer log={store.log} names={store.seatNames} />
+{/snippet}
 
 <svelte:window onkeydown={onKeydown} />
 
 {#if store.state}
-	<Scoreboard
-		scores={store.state.scores}
-		finished={store.state.finished}
-		handNumber={store.state.handNumber}
-		phase={store.state.phase}
-		winner={store.state.winner}
-		names={store.seatNames}
-		onNextHand={() => store.nextHand()}
-	/>
-
-	{#if store.state.phase === 'gameOver'}
-		<section
-			class="rounded-2xl border border-amber-400/60 bg-emerald-900/60 p-6 text-center"
-			data-testid="game-over-panel"
-		>
-			<h2 class="text-2xl font-bold text-amber-300">
-				Game over — {store.seatNames[store.state.winner ?? 0]} wins!
-			</h2>
-			<p class="mt-1 text-sm text-emerald-200">
-				Final scores — {store.seatNames.map((name, seat) => `${name}: ${store.state?.scores[seat] ?? 0}`).join(' · ')}
-			</p>
-		</section>
-	{/if}
-
-	<div class="relative flex flex-col items-center gap-3" bind:this={tableEl}>
-		<Seat
-			name={store.seatNames[2]}
-			position="top"
-			cardCount={seatCardCounts[2]}
-			isTurn={store.state.turn === 2 && store.state.phase === 'playing' && interacting}
-			passed={store.state.players[2]?.passed ?? false}
-			out={store.state.players[2]?.out ?? false}
+	<div class="shell">
+		<Rail
+			scores={store.state.scores}
+			names={store.seatNames}
+			finished={store.state.finished}
+			handNumber={store.state.handNumber}
+			phase={store.state.phase}
+			winner={store.state.winner}
+			turn={store.state.turn}
+			nav={railRight}
 		/>
 
-		<div class="flex w-full items-start justify-between gap-2">
+		<div class="table" bind:this={tableEl}>
+			<Felt />
+
+			<Seat
+				name={store.seatNames[2]}
+				position="top"
+				cardCount={seatCardCounts[2]}
+				isTurn={store.state.turn === 2 && store.state.phase === 'playing' && interacting}
+				passed={store.state.players[2]?.passed ?? false}
+				out={store.state.players[2]?.out ?? false}
+			/>
 			<Seat
 				name={store.seatNames[1]}
 				position="left"
@@ -238,12 +242,6 @@
 				passed={store.state.players[1]?.passed ?? false}
 				out={store.state.players[1]?.out ?? false}
 			/>
-
-			<div class="flex min-w-0 flex-1 flex-col items-center gap-3">
-				<TrickPile trick={store.state.trick} lastTrick={store.state.lastTrick} names={store.seatNames} />
-				<TurnBanner state={store.state} names={store.seatNames} />
-			</div>
-
 			<Seat
 				name={store.seatNames[3]}
 				position="right"
@@ -252,34 +250,63 @@
 				passed={store.state.players[3]?.passed ?? false}
 				out={store.state.players[3]?.out ?? false}
 			/>
+
+			<div class="play-zone">
+				{#if store.dealingPending}
+					<div class="deal-panel" data-testid="deal-panel">
+						<button
+							type="button"
+							data-testid="deal-button"
+							class="btn-primary"
+							onclick={() => store.startDealing()}
+						>
+							Deal cards
+						</button>
+					</div>
+				{:else}
+					<TrickPile
+						trick={store.state.trick}
+						lastTrick={store.state.lastTrick}
+						names={store.seatNames}
+						dealing={store.dealing}
+					/>
+				{/if}
+			</div>
+
+			{#if store.dealing && dealTargets.length === 52}
+				<div class="pointer-events-none absolute inset-0 z-30" aria-hidden="true">
+					<p class="deal-label">Dealing… {store.dealProgress}/52</p>
+					{#each dealTargets as target, i (i)}
+						<CardBack
+							class="deal-card"
+							style="position: absolute; left: 50%; top: 50%; --dx: {target.dx}px; --dy: {target.dy}px; animation-delay: {i *
+								dealInterval}ms; --back-w: 2.1rem"
+						/>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
-		{#if store.dealingPending}
-			<div class="flex flex-col items-center gap-2 py-6" data-testid="deal-panel">
-				<button
-					type="button"
-					data-testid="deal-button"
-					class="rounded-xl bg-emerald-500 px-8 py-3 text-lg font-semibold text-emerald-950 shadow-lg transition hover:bg-emerald-400"
-					onclick={() => store.startDealing()}
-				>
-					Deal cards
-				</button>
+		<div class="dock">
+			<div class="dock-prompt">
+				<TurnBanner state={store.state} names={store.seatNames} />
 			</div>
-		{:else if store.state.phase === 'playing'}
-			<div class={store.dealing ? 'invisible' : ''} bind:this={handAreaEl}>
-				<div class="mb-8">
+			<div class="dock-actions">
+				{#if store.state.phase === 'playing'}
 					<ActionBar
 						canPlay={canPlay}
 						canPass={canPass}
 						{reason}
+						{summary}
 						autoPass={store.autoPass}
 						onPlay={onPlay}
 						onPass={onPass}
 						onToggleAutoPass={(value) => (store.autoPass = value)}
 						shakeKey={store.shake}
 					/>
-				</div>
-
+				{/if}
+			</div>
+			<div class="dock-hand {store.dealing || store.dealingPending ? 'invisible' : ''}" bind:this={handAreaEl}>
 				<Hand
 					cards={hand}
 					selected={selected}
@@ -289,34 +316,25 @@
 					disabled={!store.myTurn}
 				/>
 			</div>
-		{:else}
-			<p class="py-4 text-center text-sm text-emerald-200">
-				{store.state.phase === 'handOver'
-					? 'Hand over — start the next hand from the scoreboard.'
-					: 'The game has ended. Start a new game from the scoreboard.'}
-			</p>
-		{/if}
+		</div>
 
-		<LogDrawer log={store.log} names={store.seatNames} />
-
-		{#if store.dealing && dealTargets.length === 52}
-			<div class="pointer-events-none absolute inset-0 z-20" aria-hidden="true">
-				<p class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-emerald-300">
-					Dealing… {store.dealProgress}/52
-				</p>
-				{#each dealTargets as target, i (i)}
-					<span
-						class="deal-card card-back"
-						style="--dx: {target.dx}px; --dy: {target.dy}px; animation-delay: {i * dealInterval}ms"
-					></span>
-				{/each}
-			</div>
-		{/if}
+		<PlacingsPanel
+			scores={store.state.scores}
+			names={store.seatNames}
+			finished={store.state.finished}
+			handNumber={store.state.handNumber}
+			phase={store.state.phase}
+			winner={store.state.winner}
+			onNextHand={() => store.nextHand()}
+		/>
 	</div>
 {:else}
-	<p class="py-16 text-center text-emerald-300">Dealing…</p>
+	<div class="shell">
+		<div class="rail"></div>
+		<div class="table">
+			<Felt />
+			<p class="deal-label">Dealing…</p>
+		</div>
+		<div class="dock"></div>
+	</div>
 {/if}
-<div class="rotate-overlay" aria-hidden="true">
-	<svg viewBox="0 0 24 24" class="rotate-icon"><path d="M17 1H7c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14z" fill="currentColor" /></svg>
-	<p>Please rotate your device to landscape to play.</p>
-</div>

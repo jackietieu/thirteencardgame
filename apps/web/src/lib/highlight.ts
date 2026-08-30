@@ -1,4 +1,4 @@
-import { currentRequirement, legalMoves, type Card, type GameState } from '@thirteen/engine';
+import { currentRequirement, legalMoves, type Card, type RulesState } from '@thirteen/engine';
 
 /** Canonical card key: rank * 4 + suit. */
 export function cardKey(card: Card): string {
@@ -13,7 +13,7 @@ export function cardKey(card: Card): string {
  * the same length whose ranks are all present (and that can beat the requirement's
  * top card) glows every card in its ranks.
  */
-export function participatingCards(state: GameState, seat: number): Set<string> {
+export function participatingCards(state: RulesState, seat: number): Set<string> {
 	const keys = new Set<string>();
 	for (const move of legalMoves(state, seat)) {
 		for (const card of move.cards) keys.add(cardKey(card));

@@ -70,4 +70,11 @@ describe('viewForSeat', () => {
 			}
 		}
 	});
+
+	it('never leaks the RNG state (client could precompute the next deal)', () => {
+		for (let seat = 0; seat < 4; seat++) {
+			expect(Object.hasOwn(viewForSeat(state, seat), 'rngState')).toBe(false);
+			expect(JSON.stringify(viewForSeat(state, seat))).not.toContain('"rngState"');
+		}
+	});
 });

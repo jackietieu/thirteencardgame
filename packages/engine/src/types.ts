@@ -76,6 +76,15 @@ export interface GameState {
   rngState: number;
 }
 
+/**
+ * The subset of game state the pure rule helpers read. Both the authoritative
+ * state and a seat-scoped view satisfy it, so the UI can reason on views
+ * without ever touching the RNG state or hidden hands.
+ */
+export type RulesState = Omit<GameState, 'rngState' | 'players'> & {
+  players: Pick<PlayerState, 'hand' | 'out' | 'passed'>[];
+};
+
 export class EngineError extends Error {
   constructor(
     public code: string,

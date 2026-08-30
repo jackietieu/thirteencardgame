@@ -66,8 +66,12 @@ test('full game: deal, play hands vs bots, reach game over with scores', async (
 	expect(seed).toBeGreaterThan(0);
 
 	await page.goto(`/play?fast=1&seed=${seed}`);
+	await page.getByTestId('name-input').fill('Tester');
+	await page.getByTestId('name-submit').click();
 	await page.waitForFunction(() => !!(window as unknown as { __thirteen?: Thirteen }).__thirteen?.store.state);
-	await page.getByTestId('deal-button').click();
+	// dispatchEvent: the button unmounts itself when the deal starts, which
+	// would send a normal .click() into an endless retry loop.
+	await page.getByTestId('deal-button').dispatchEvent('click');
 
 	const deadline = Date.now() + 130_000;
 	let finished = false;
@@ -104,6 +108,5 @@ test('full game: deal, play hands vs bots, reach game over with scores', async (
 	}
 	expect(finished, 'game reached game over in time').toBe(true);
 
-	await expect(page.getByTestId('game-over')).toBeVisible();
-	await expect(page.getByTestId('scoreboard')).toContainText(/You: \d+/);
+	await expect(page.getByTestId('scoreboard')).toContainText(/Tester: \d+/);
 });

@@ -54,6 +54,10 @@ class WsClient {
 
 let server: ServerHandle;
 
+// Hermetic: never call the real OpenAI moderations API even when a key is
+// present in the developer's environment.
+process.env.OPENAI_MODERATION = 'off';
+
 beforeEach(async () => {
 	server = await startServer({ port: 0 });
 });
@@ -67,6 +71,7 @@ describe('ws server', () => {
 
 	it('create → lobby → start with bots → state arrives', async () => {
 		const host = new WsClient(server.port);
+
 		await host.opened();
 		host.send({ t: 'create', sid: 'sid-a', name: 'Alice' });
 		const lobby = await host.waitFor((m) => m.t === 'lobby');
@@ -76,6 +81,17 @@ describe('ws server', () => {
 		expect(state.t === 'state' && state.seatNames[0]).toBe('Alice');
 		expect(state.t === 'state' && state.state.players[0]!.hand.length).toBe(13);
 		host.close();
+	});
+
+	it('answers pings with pongs', async () => {
+		const c = new WsClient(server.port);
+		await c.opened();
+		c.send({ t: 'create', sid: 'sid-p', name: 'Pat' });
+		await c.waitFor((m) => m.t === 'lobby');
+		c.send({ t: 'ping' });
+		const pong = await c.waitFor((m) => m.t === 'pong');
+		expect(pong.t).toBe('pong');
+		c.close();
 	});
 
 	it('two humans + two bots: both humans receive correctly rotated views', async () => {
@@ -101,5 +117,28 @@ describe('ws server', () => {
 		expect(sb.t === 'state' && sb.state.players[1]!.hand).toEqual([]);
 		a.close();
 		b.close();
+	});
+
+	it('chat flows between humans and replays to a reconnecting socket', async () => {
+		const a = new WsClient(server.port);
+		const b = new WsClient(server.port);
+		await Promise.all([a.opened(), b.opened()]);
+		a.send({ t: 'create', sid: 'sid-a', name: 'Ann' });
+		const lobby = await a.waitFor((m) => m.t === 'lobby');
+		const room = lobby.t === 'lobby' ? lobby.room : '';
+		b.send({ t: 'join', room, sid: 'sid-b', name: 'Ben' });
+		await b.waitFor((m) => m.t === 'lobby');
+		a.send({ t: 'chat', text: 'hello Ben' });
+		const got = await b.waitFor((m) => m.t === 'chat');
+		expect(got.t === 'chat' && got.name).toBe('Ann');
+		// Ben reloads: fresh socket, same sid — history replays.
+		const b2 = new WsClient(server.port);
+		await b2.opened();
+		b2.send({ t: 'join', room, sid: 'sid-b', name: 'Ben' });
+		const replay = await b2.waitFor((m) => m.t === 'chat');
+		expect(replay.t === 'chat' && replay.text).toBe('hello Ben');
+		a.close();
+		b.close();
+		b2.close();
 	});
 });

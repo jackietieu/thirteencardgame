@@ -13,7 +13,7 @@ export interface PlayerView extends Omit<PlayerState, 'hand'> {
 	handCount: number;
 }
 
-export interface SeatView extends Omit<GameState, 'players'> {
+export interface SeatView extends Omit<GameState, 'players' | 'rngState'> {
 	players: PlayerView[];
 }
 
@@ -51,7 +51,6 @@ export function viewForSeat(state: GameState, seat: number): SeatView {
 		finished: state.finished.map((s) => mod4(s - seat)),
 		lastHandWinner:
 			state.lastHandWinner === null ? null : mod4(state.lastHandWinner - seat),
-		winner: state.winner === null ? null : mod4(state.winner - seat),
-		rngState: state.rngState
+		winner: state.winner === null ? null : mod4(state.winner - seat)
 	};
 }

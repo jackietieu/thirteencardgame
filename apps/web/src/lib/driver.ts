@@ -1,4 +1,4 @@
-import type { GameState, Move } from '@thirteen/engine';
+import type { Move, RulesState } from '@thirteen/engine';
 
 /** One logged play or pass. Seats are in display coordinates (0 = you). */
 export interface LogEntry {
@@ -15,7 +15,7 @@ export interface LogEntry {
  */
 export interface GameDriver {
 	/** Current game snapshot (seat-rotated, opponents hidden online). */
-	readonly state: GameState | null;
+	readonly state: RulesState | null;
 	readonly seatNames: string[];
 	readonly log: LogEntry[];
 	/** True when it is the local player's turn and the hand is live. */

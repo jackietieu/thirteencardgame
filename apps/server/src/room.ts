@@ -8,11 +8,14 @@ import {
 	type Action,
 	type GameState
 } from '@thirteen/engine';
+import { moderateText } from './moderate.js';
 import type { SeatView, ServerMessage } from '@thirteen/protocol';
 import { loadRoomState, recordGame, saveRoomState, upsertPlayer, type PersistedSeat } from './db.js';
 
 /** Names handed to server-driven bots as they fill seats. */
-const BOT_NAMES = ['Hùng', 'Lan', 'Mai', 'Tuấn', 'Smith', 'Johnson', 'Williams', 'Brown'];
+const BOT_NAMES = ['Hùng', 'Lan', 'Mai', 'Tuấn', 'Emma', 'Liam', 'Noah', 'Olivia'];
+/** Max characters per chat message. */
+const CHAT_MAX_LEN = 280;
 
 export interface SeatConn {
 	send(msg: ServerMessage): void;
@@ -30,12 +33,13 @@ interface Seat {
 
 export interface RoomOptions {
 	code: string;
-	/** Optional lobby password — new joiners must repeat it (sid reclaim is exempt). */
+	/** How long a dropped human keeps the seat before a bot takes over. */
+	disconnectGraceMs?: number;
+	/** Chat moderator override (tests). Default: OpenAI moderations API. */
+	moderate?: (text: string) => Promise<boolean>;
 	password?: string;
 	/** Delay before a bot acts (lets humans watch the trick develop). */
 	botDelayMs?: number;
-	/** How long a dropped human keeps the seat before a bot takes over. */
-	disconnectGraceMs?: number;
 	seed?: number;
 }
 
@@ -69,12 +73,17 @@ export class Room {
 	seq = 0;
 	private seats: (Seat | null)[] = [null, null, null, null];
 	private botDelayMs: number;
+	private moderate: (text: string) => Promise<boolean>;
 	private disconnectGraceMs: number;
 	private seed: number | undefined;
 	private botTimer: ReturnType<typeof setTimeout> | undefined;
 	private closed = false;
 	/** Hand whose game-over result was already written to the database. */
 	private recordedHand = -1;
+	/** Recent chat, replayed to (re)joining seats. Room-seat coordinates. */
+	private chatLog: { seat: number; name: string; text: string }[] = [];
+	/** Per-seat send timestamps for the flood guard (room seats). */
+	private chatStamps = new Map<number, number[]>();
 	/** Serializes snapshot writes so an older payload never lands last. */
 	private persistTail: Promise<void> = Promise.resolve();
 
@@ -83,6 +92,7 @@ export class Room {
 		this.passwordHash = options.password ? sha256(options.password) : '';
 		this.botDelayMs = options.botDelayMs ?? 500;
 		this.disconnectGraceMs = options.disconnectGraceMs ?? 60_000;
+		this.moderate = options.moderate ?? moderateText;
 		this.seed = options.seed;
 	}
 	/** Seats with a live connection (bots excluded). */
@@ -250,6 +260,7 @@ export class Room {
 				s.takeoverTimer = undefined;
 			}
 			this.deliver(existing, conn);
+			this.deliverChatHistory(existing, conn);
 			this.persist();
 			if (renamed && this.state === null) this.broadcastLobby();
 			return existing;
@@ -267,6 +278,7 @@ export class Room {
 		// occupied); everyone seated must see the updated roster.
 		if (this.state === null) this.broadcastLobby();
 		else this.deliver(open, conn);
+		this.deliverChatHistory(open, conn);
 		return open;
 	}
 
@@ -274,6 +286,35 @@ export class Room {
 	private deliver(seat: number, conn: SeatConn) {
 		if (this.state === null) conn.send(this.lobbyMessage(seat));
 		else conn.send(this.stateMessage(seat));
+	}
+	/** Broadcasts a chat message to every connected human and keeps a short
+	 *  history so late joiners and reconnects see recent context. Flood guard:
+	 *  5 messages per 10s per seat — excess is dropped silently. Moderation
+	 *  runs before the broadcast; a rejected message errors back to the sender
+	 *  only. Async so the moderator can decide; two rapid sends may therefore
+	 *  appear slightly out of order. */
+	async chat(conn: SeatConn, raw: string): Promise<void> {
+		const seat = this.seatOf(conn);
+		if (seat === -1) return this.sendError(conn, 'not_joined', -1);
+		const text = raw.trim().slice(0, CHAT_MAX_LEN);
+		if (!text) return;
+		const now = Date.now();
+		const stamps = (this.chatStamps.get(seat) ?? []).filter((t) => now - t < 10_000);
+		if (stamps.length >= 5) return;
+		stamps.push(now);
+		this.chatStamps.set(seat, stamps);
+		if (!(await this.moderate(text))) return this.sendError(conn, 'chat_blocked', -1);
+		const name = this.seats[seat]!.name;
+		this.chatLog.push({ seat, name, text });
+		if (this.chatLog.length > 50) this.chatLog.shift();
+		this.eachHuman((viewer, c) => c.send({ t: 'chat', seat: mod4(seat - viewer), name, text }));
+	}
+
+	/** Replays recent chat to a freshly (re)joined seat, rotated for them. */
+	private deliverChatHistory(seat: number, conn: SeatConn) {
+		for (const m of this.chatLog) {
+			conn.send({ t: 'chat', seat: mod4(m.seat - seat), name: m.name, text: m.text });
+		}
 	}
 
 	/** Detaches a connection. If it was a human's last link, the grace timer runs. */
