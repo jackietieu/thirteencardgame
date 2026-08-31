@@ -574,15 +574,14 @@ body {
 	}
 }
 
-/* Plays entering the felt from their seat's direction. */
+/* Plays entering the felt from their seat's direction. No `to` keyframe:
+   the animation interpolates to the element's own transform (the pile
+   jitter), so the card lands on its final offset without a post-landing
+   snap from `transform: none`. */
 @keyframes enter-n {
 	from {
 		opacity: 0;
 		transform: translateY(-2.5rem) scale(0.85);
-	}
-	to {
-		opacity: 1;
-		transform: none;
 	}
 }
 @keyframes enter-s {
@@ -590,29 +589,17 @@ body {
 		opacity: 0;
 		transform: translateY(2.5rem) scale(0.85);
 	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
 }
 @keyframes enter-w {
 	from {
 		opacity: 0;
 		transform: translateX(-2.5rem) scale(0.85);
 	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
 }
 @keyframes enter-e {
 	from {
 		opacity: 0;
 		transform: translateX(2.5rem) scale(0.85);
-	}
-	to {
-		opacity: 1;
-		transform: none;
 	}
 }
 .enter-0 {
