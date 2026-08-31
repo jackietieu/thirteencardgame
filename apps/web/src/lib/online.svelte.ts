@@ -208,6 +208,7 @@ class OnlineGameStore implements GameDriver {
 			case 'lobby':
 				this.creating = false;
 				this.status = 'lobby';
+				this.room = msg.room;
 				this.lastRoom = msg.room;
 				saveRoom(msg.room);
 				this.lobbyPlayers = msg.players;
@@ -220,6 +221,10 @@ class OnlineGameStore implements GameDriver {
 				const prev = this.state;
 				this.creating = false;
 				this.status = 'playing';
+				// State snapshots carry no room code and mid-game rejoins never
+				// see a lobby — recover it from what we already know so display,
+				// persistence and the seat token stay attached to the room.
+				this.room = this.room || this.lastRoom || getSavedRoom();
 				this.lastRoom = this.room;
 				saveRoom(this.room);
 				this.mySeat = msg.seat;
