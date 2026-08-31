@@ -116,6 +116,11 @@ class OnlineGameStore implements GameDriver {
 		this.send({ t: 'start' });
 	}
 
+	/** Host action: remove another player from the lobby (dead connection or unwanted). */
+	kick(seat: number) {
+		this.send({ t: 'kick', seat });
+	}
+
 	private connect(open: (ws: WebSocket) => void) {
 		this.cancelTimers();
 		this.openHandler = open;
@@ -228,6 +233,17 @@ class OnlineGameStore implements GameDriver {
 				this.lastPongAt = Date.now();
 				return;
 			case 'event':
+				if (msg.name === 'kicked') {
+					// Rotated display seat 0 = me: the host removed this client.
+					if (msg.seat === 0) {
+						this.openHandler = null;
+						this.lastRoom = '';
+						saveRoom('');
+						this.teardown();
+						this.lastError = 'kicked';
+					}
+					return;
+				}
 				if (msg.name === 'played' || msg.name === 'passed') {
 					this.log.push({
 						seat: msg.seat,

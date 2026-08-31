@@ -181,4 +181,22 @@ describe('ws server', () => {
 			await full.close();
 		}
 	});
+
+	it('the host can kick another human from the lobby over the wire', async () => {
+		const host = new WsClient(server.port);
+		const guest = new WsClient(server.port);
+		await Promise.all([host.opened(), guest.opened()]);
+		host.send({ t: 'create', sid: 'sid-h', name: 'Host' });
+		const lobby = await host.waitFor((m) => m.t === 'lobby');
+		const room = lobby.t === 'lobby' ? lobby.room : '';
+		guest.send({ t: 'join', room, sid: 'sid-g', name: 'Guest' });
+		await guest.waitFor((m) => m.t === 'lobby');
+		host.send({ t: 'kick', seat: 1 });
+		const kicked = await guest.waitFor((m) => m.t === 'event' && m.name === 'kicked');
+		expect(kicked.t === 'event' && kicked.seat).toBe(0); // rotated: victim is 0
+		const roster = await host.waitFor((m) => m.t === 'lobby' && m.players[1] === '');
+		expect(roster.t).toBe('lobby');
+		host.close();
+		guest.close();
+	});
 });

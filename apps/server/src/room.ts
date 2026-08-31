@@ -28,7 +28,7 @@ interface Seat {
 	conn: SeatConn | null;
 	bot: boolean;
 	lastSeq: number;
-	takeoverTimer: ReturnType<typeof setTimeout> | undefined;
+	disconnectTimer: ReturnType<typeof setTimeout> | undefined;
 }
 
 export interface RoomOptions {
@@ -191,32 +191,43 @@ export class Room {
 		room.seats = Array.from({ length: 4 }, (_, i) => {
 			const s = row.seats[i];
 			return s
-				? { name: s.name, sid: s.sid, conn: null, bot: s.bot, lastSeq: s.lastSeq, takeoverTimer: undefined }
+				? { name: s.name, sid: s.sid, conn: null, bot: s.bot, lastSeq: s.lastSeq, disconnectTimer: undefined }
 				: null;
 		});
-		for (let seat = 0; seat < 4; seat++) room.armTakeover(seat);
+		for (let seat = 0; seat < 4; seat++) room.armDisconnect(seat);
 		room.scheduleBot();
 		return room;
 	}
 
-	/** Starts the grace timer for a human seat whose connection dropped. */
-	private armTakeover(seat: number) {
+	/**
+	 * Starts the grace timer for a human seat whose connection dropped.
+	 * Mid-game the seat is handed to a bot; in the lobby the seat is freed —
+	 * a ghost must not squat on the roster forever.
+	 */
+	private armDisconnect(seat: number) {
 		const s = this.seats[seat];
-		if (!s || s.bot || s.conn !== null || this.state === null || s.takeoverTimer !== undefined) return;
-		s.takeoverTimer = setTimeout(() => {
-			s.takeoverTimer = undefined;
+		if (!s || s.bot || s.conn !== null || s.disconnectTimer !== undefined) return;
+		s.disconnectTimer = setTimeout(() => {
+			s.disconnectTimer = undefined;
 			if (s.conn !== null) return; // came back in time
-			s.bot = true;
-			s.name = BOT_NAMES[seat % BOT_NAMES.length]!;
-			this.broadcastEvent('botTakeover', seat);
-			this.broadcastState();
-			this.scheduleBot();
+			if (this.state === null) {
+				this.seats[seat] = null;
+				this.chatStamps.delete(seat);
+				this.broadcastLobby();
+				this.persist();
+			} else {
+				s.bot = true;
+				s.name = BOT_NAMES[seat % BOT_NAMES.length]!;
+				this.broadcastEvent('botTakeover', seat);
+				this.broadcastState();
+				this.scheduleBot();
+			}
 		}, this.disconnectGraceMs);
 	}
 
 
 	private broadcastEvent(
-		name: 'played' | 'passed' | 'nextHand' | 'seatLeft' | 'botTakeover',
+		name: 'played' | 'passed' | 'nextHand' | 'seatLeft' | 'botTakeover' | 'kicked',
 		roomSeat: number,
 		action?: Action
 	) {
@@ -255,9 +266,9 @@ export class Room {
 			// The client is fresh (reload): its action counter restarted at 1,
 			// so the persisted lastSeq would silently drop every new action.
 			s.lastSeq = 0;
-			if (s.takeoverTimer !== undefined) {
-				clearTimeout(s.takeoverTimer);
-				s.takeoverTimer = undefined;
+			if (s.disconnectTimer !== undefined) {
+				clearTimeout(s.disconnectTimer);
+				s.disconnectTimer = undefined;
 			}
 			this.deliver(existing, conn);
 			this.deliverChatHistory(existing, conn);
@@ -269,9 +280,27 @@ export class Room {
 		if (this.passwordHash !== '' && this.seats.some((s) => s !== null) && (!password || sha256(password) !== this.passwordHash)) {
 			throw new RoomError('bad_password');
 		}
-		const open = this.seats.findIndex((s) => s === null);
+		let open = this.seats.findIndex((s) => s === null);
+		if (open === -1 && this.state === null) {
+			// Full lobby: a live connection beats a ghost — recycle a seat whose
+			// human has no connection. Without this, one alt-tab blocks the room.
+			open = this.seats.findIndex((s) => s !== null && !s.bot && s.conn === null);
+			if (open !== -1) {
+				const ghost = this.seats[open]!;
+				if (ghost.disconnectTimer !== undefined) {
+					clearTimeout(ghost.disconnectTimer);
+					ghost.disconnectTimer = undefined;
+				}
+				this.seats[open] = null;
+			}
+		}
+		if (open === -1 && this.state !== null && this.isEmpty()) {
+			// Abandoned mid-game (every seat is a bot, no humans left): let the
+			// arrival adopt a bot seat instead of bouncing a returning player.
+			open = this.seats.findIndex((s) => s !== null && s.bot);
+		}
 		if (open === -1) return null;
-		this.seats[open] = { name, sid, conn, bot: false, lastSeq: 0, takeoverTimer: undefined };
+		this.seats[open] = { name, sid, conn, bot: false, lastSeq: 0, disconnectTimer: undefined };
 		void upsertPlayer(sid, name);
 		this.persist();
 		// New seats only open up in the lobby (mid-game seats are always
@@ -323,11 +352,11 @@ export class Room {
 			const s = this.seats[seat];
 			if (!s || s.conn !== conn) continue;
 			s.conn = null;
-			if (this.state !== null && !s.bot) {
+			if (this.state !== null) {
 				this.broadcastEvent('seatLeft', seat);
 				this.persist();
-				this.armTakeover(seat);
 			}
+			this.armDisconnect(seat);
 		}
 	}
 
@@ -335,9 +364,9 @@ export class Room {
 		for (let seat = 0; seat < 4; seat++) {
 			const s = this.seats[seat];
 			if (!s || s.conn !== conn) continue;
-			if (s.takeoverTimer !== undefined) {
-				clearTimeout(s.takeoverTimer);
-				s.takeoverTimer = undefined;
+			if (s.disconnectTimer !== undefined) {
+				clearTimeout(s.disconnectTimer);
+				s.disconnectTimer = undefined;
 			}
 			if (this.state === null) {
 				this.seats[seat] = null;
@@ -360,21 +389,50 @@ export class Room {
 		const caller = this.seatOf(conn);
 		if (caller === -1 || caller !== host) return this.sendError(conn, 'not_host', -1);
 		for (let seat = 0; seat < 4; seat++) {
-			if (this.seats[seat] === null) {
+			const s = this.seats[seat];
+			if (s == null) {
 				this.seats[seat] = {
 					name: BOT_NAMES[seat % BOT_NAMES.length]!,
 					sid: `bot:${this.code}:${seat}`,
 					conn: null,
 					bot: true,
 					lastSeq: 0,
-					takeoverTimer: undefined
+					disconnectTimer: undefined
 				};
+			} else if (!s.bot && s.conn === null) {
+				// Lobby ghost (disconnected, grace still running): a dead seat
+				// could never act and would stall the hand — hand it to a bot.
+				if (s.disconnectTimer !== undefined) {
+					clearTimeout(s.disconnectTimer);
+					s.disconnectTimer = undefined;
+				}
+				s.bot = true;
+				s.name = BOT_NAMES[seat % BOT_NAMES.length]!;
 			}
 		}
 		this.state = createGame(this.seed);
 		this.seq++;
 		this.broadcastState();
 		this.scheduleBot();
+	}
+
+	/** Host action: remove another human seat from the lobby (a dead or
+	 *  unwanted player). The victim is told, then the seat is freed. */
+	kick(conn: SeatConn, seat: number): void {
+		if (this.state !== null) return this.sendError(conn, 'not_lobby', -1);
+		const caller = this.seatOf(conn);
+		if (caller === -1 || caller !== this.hostSeat()) return this.sendError(conn, 'not_host', -1);
+		const target = this.seats[seat];
+		if (seat === caller || !target || target.bot) return this.sendError(conn, 'bad_seat', -1);
+		this.broadcastEvent('kicked', seat);
+		if (target.disconnectTimer !== undefined) {
+			clearTimeout(target.disconnectTimer);
+			target.disconnectTimer = undefined;
+		}
+		this.seats[seat] = null;
+		this.chatStamps.delete(seat);
+		this.broadcastLobby();
+		this.persist();
 	}
 
 	private sendError(conn: SeatConn, code: string, on: number) {
@@ -459,9 +517,9 @@ export class Room {
 		this.closed = true;
 		clearTimeout(this.botTimer);
 		for (const s of this.seats) {
-			if (s?.takeoverTimer !== undefined) {
-				clearTimeout(s.takeoverTimer);
-				s.takeoverTimer = undefined;
+			if (s?.disconnectTimer !== undefined) {
+				clearTimeout(s.disconnectTimer);
+				s.disconnectTimer = undefined;
 			}
 		}
 	}

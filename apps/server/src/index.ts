@@ -77,6 +77,8 @@ function serveSocket(
 					return room.action(conn, msg.seq, msg.action);
 				case 'nextHand':
 					return room.nextHand(conn);
+				case 'kick':
+					return room.kick(conn, msg.seat);
 				case 'chat':
 					return room.chat(conn, msg.text);
 				case 'ping':

@@ -240,6 +240,104 @@ describe('room', () => {
 		expect(room.join('Late', 'sid-late', late)).toBe(2);
 	});
 
+
+	it('the host can kick a lobby seat; the victim is told and the seat is freed', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.kick(seats[0]!, 2);
+		const lobby = room.lobbyMessage(0);
+		expect(lobby.t === 'lobby' && lobby.players).toEqual(['P0', 'P1', '', 'P3']);
+		// Everyone (rotated) learns who was kicked; the victim sees themselves.
+		expect(seats[2]!.events('kicked')[0]).toMatchObject({ seat: 0 });
+		expect(seats[1]!.events('kicked')[0]).toMatchObject({ seat: 1 });
+		// The freed seat is joinable again.
+		const again = new FakeConn();
+		expect(room.join('P2b', 'sid-9', again)).toBe(2);
+	});
+
+	it('kick is host-only, lobby-only and targets human seats', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.kick(seats[1]!, 0);
+		expect(seats[1]!.last).toMatchObject({ t: 'error', code: 'not_host' });
+		room.kick(seats[0]!, 0);
+		expect(seats[0]!.last).toMatchObject({ t: 'error', code: 'bad_seat' });
+		room.start(seats[0]!);
+		room.kick(seats[0]!, 1);
+		expect(seats[0]!.last).toMatchObject({ t: 'error', code: 'not_lobby' });
+	});
+
+	it('a lobby seat disconnected past the grace period is freed', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.disconnect(seats[2]!);
+		vi.advanceTimersByTime(GRACE + 1);
+		const lobby = room.lobbyMessage(0);
+		expect(lobby.t === 'lobby' && lobby.players).toEqual(['P0', 'P1', '', 'P3']);
+		// A returning player takes a fresh seat instead of a dead reclaim.
+		const back = new FakeConn();
+		expect(room.join('P2', 'sid-2', back)).toBe(2);
+		expect(back.last).toMatchObject({ t: 'lobby', seat: 2 });
+	});
+
+	it('a lobby seat that reconnects within the grace window keeps its seat', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.disconnect(seats[1]!);
+		room.join('P1', 'sid-1', new FakeConn());
+		vi.advanceTimersByTime(GRACE + 1);
+		const lobby = room.lobbyMessage(0);
+		expect(lobby.t === 'lobby' && lobby.players).toEqual(['P0', 'P1', 'P2', 'P3']);
+	});
+
+	it('starting with a disconnected lobby seat hands it to a bot', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.disconnect(seats[2]!);
+		room.start(seats[0]!);
+		expect(room.seatIsBot(2)).toBe(true);
+	});
+
+	it('a full lobby recycles a disconnected ghost seat for a new joiner', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.disconnect(seats[3]!); // ghost holds a seat, grace still running
+		const fifth = new FakeConn();
+		expect(room.join('P5', 'sid-5', fifth)).toBe(3);
+		const lobby = room.lobbyMessage(0);
+		expect(lobby.t === 'lobby' && lobby.players).toEqual(['P0', 'P1', 'P2', 'P5']);
+		expect(fifth.last).toMatchObject({ t: 'lobby', seat: 3 });
+	});
+
+	it('a full lobby of connected humans still rejects a fifth player', () => {
+		const room = makeRoom();
+		joinFour(room);
+		expect(room.join('P5', 'sid-5', new FakeConn())).toBeNull();
+	});
+
+	it('an abandoned mid-game room lets a lone arrival adopt a bot seat', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.start(seats[0]!);
+		playHand(room, seats);
+		// Everyone vanishes; bot takeover fills in after the grace period.
+		for (const c of seats) room.disconnect(c);
+		vi.advanceTimersByTime(GRACE + 1);
+		expect(room.seatIsBot(0)).toBe(true);
+		const returning = new FakeConn();
+		expect(room.join('P0', 'sid-fresh', returning)).toBe(0);
+		expect(room.seatIsBot(0)).toBe(false);
+		expect(returning.last).toMatchObject({ t: 'state', seat: 0 });
+	});
+
+	it('a mid-game room with connected humans still rejects a fifth player', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.start(seats[0]!);
+		playHand(room, seats);
+		expect(room.join('P5', 'sid-5', new FakeConn())).toBeNull();
+	});
+
 	it('leave mid-game hands the seat to a bot and informs the other humans', () => {
 		const room = makeRoom();
 		const seats = joinFour(room);

@@ -50,6 +50,12 @@ export interface ClientLeave {
 	t: 'leave';
 }
 
+export interface ClientKick {
+	t: 'kick';
+	/** Room seat index to remove from the lobby — host only. */
+	seat: number;
+}
+
 export interface ClientChat {
 	t: 'chat';
 	/** Free-form message to everyone in the room; server clamps length. */
@@ -67,6 +73,7 @@ export type ClientMessage =
 	| ClientStart
 	| ClientAction
 	| ClientNextHand
+	| ClientKick
 	| ClientChat
 	| ClientLeave
 	| ClientPing;
@@ -100,7 +107,7 @@ export interface ServerState {
 /** One play/pass, already rotated for the recipient — for the log/animations. */
 export interface ServerEvent {
 	t: 'event';
-	name: 'played' | 'passed' | 'nextHand' | 'seatLeft' | 'botTakeover';
+	name: 'played' | 'passed' | 'nextHand' | 'seatLeft' | 'botTakeover' | 'kicked';
 	/** Display seat (recipient = 0) the event concerns, or -1 if none. */
 	seat: number;
 	handNumber: number;

@@ -190,10 +190,12 @@
 							{online.lastError === 'room_not_found'
 								? 'No room with that code.'
 								: online.lastError === 'room_full'
-									? 'That room is full.'
+									? 'Room is full right now — if someone just left, try again in a moment.'
 									: online.lastError === 'bad_password'
 										? 'Wrong password — try again.'
-										: online.lastError}
+										: online.lastError === 'kicked'
+											? 'You were removed from the room.'
+											: online.lastError}
 						</p>
 					{/if}
 				</section>
@@ -240,9 +242,18 @@
 									{#if player === ''}<span class="text-xs text-ink-subtle">bot will fill</span>{/if}
 									{i === online.mySeat ? ' (you)' : ''}
 								</span>
-								{#if online.lobbyBots[i]}
-									<span class="text-xs text-ink-subtle">bot</span>
-								{/if}
+							{#if online.lobbyBots[i]}
+								<span class="text-xs text-ink-subtle">bot</span>
+							{:else if player !== '' && online.mySeat === online.hostSeat && i !== online.mySeat}
+								<button
+									type="button"
+									class="btn-ghost btn-sm"
+									data-testid="kick-button"
+									onclick={() => online.kick(i)}
+								>
+									Kick
+								</button>
+							{/if}
 							</li>
 						{/each}
 					</ul>
