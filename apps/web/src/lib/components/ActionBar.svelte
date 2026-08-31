@@ -19,9 +19,9 @@
 </script>
 
 <div class="flex flex-col items-center gap-1.5">
-	{#if summary}
-		<span class="combo-chip">{summary}</span>
-	{/if}
+	<!-- Both feedback rows render permanently (ghost when empty): a card
+	     selection must not grow the dock and shrink the table on phones. -->
+	<span class="combo-chip" class:ghost={!summary}>{summary ?? ''}</span>
 	<div class="flex items-center gap-2">
 		<button
 			type="button"
@@ -42,12 +42,9 @@
 			{t('action.pass')} <kbd>P</kbd>
 		</button>
 	</div>
-
-	{#if reason}
-		{#key shakeKey}
-			<p data-testid="play-reason" class="reason-pill shake">{reason}</p>
-		{/key}
-	{/if}
+	{#key shakeKey}
+		<p data-testid="play-reason" class="reason-pill shake" class:ghost={!reason}>{reason ?? ''}</p>
+	{/key}
 
 	<button
 		type="button"
@@ -70,6 +67,15 @@
 		border: 1px solid var(--color-hairline);
 		border-radius: 999px;
 		padding: 0.15rem 0.7rem;
+		/* Constant height: renders empty (ghosted) when nothing is selected
+		   so selecting a card never reflows the dock. */
+		display: inline-flex;
+		align-items: center;
+		min-height: 1.5625rem;
+		box-sizing: border-box;
+	}
+	.ghost {
+		visibility: hidden;
 	}
 	.auto-row {
 		display: inline-flex;

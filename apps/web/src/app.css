@@ -309,6 +309,12 @@ body {
 		width: min(86cqw, 46cqh);
 		height: min(86cqw, 46cqh);
 	}
+	/* Lift the side pods above the trick pile's band: a wide combo in the
+	   centered play-zone reaches the felt edges and would sit under them. */
+	.pod.pod-w,
+	.pod.pod-e {
+		top: 22%;
+	}
 }
 
 /* Seat pods on the felt rim. */
@@ -457,6 +463,12 @@ body {
 	font-weight: 600;
 	border-radius: 999px;
 	padding: 0.3rem 0.9rem;
+	/* Constant height: the pill renders empty (ghosted) between attempts so
+	   selecting a card never reflows the dock. */
+	display: inline-flex;
+	align-items: center;
+	min-height: 1.8125rem;
+	box-sizing: border-box;
 }
 
 /* Toggle switch (auto-pass). */
