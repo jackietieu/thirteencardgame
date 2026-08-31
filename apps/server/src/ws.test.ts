@@ -127,14 +127,14 @@ describe('ws server', () => {
 		const lobby = await a.waitFor((m) => m.t === 'lobby');
 		const room = lobby.t === 'lobby' ? lobby.room : '';
 		b.send({ t: 'join', room, sid: 'sid-b', name: 'Ben' });
-		await b.waitFor((m) => m.t === 'lobby');
+		const lobbyB = await b.waitFor((m) => m.t === 'lobby');
 		a.send({ t: 'chat', text: 'hello Ben' });
 		const got = await b.waitFor((m) => m.t === 'chat');
 		expect(got.t === 'chat' && got.name).toBe('Ann');
 		// Ben reloads: fresh socket, same sid — history replays.
 		const b2 = new WsClient(server.port);
 		await b2.opened();
-		b2.send({ t: 'join', room, sid: 'sid-b', name: 'Ben' });
+		b2.send({ t: 'join', room, sid: 'sid-b', name: 'Ben', token: lobbyB.t === 'lobby' ? lobbyB.seatToken : '' });
 		const replay = await b2.waitFor((m) => m.t === 'chat');
 		expect(replay.t === 'chat' && replay.text).toBe('hello Ben');
 		a.close();
@@ -198,5 +198,40 @@ describe('ws server', () => {
 		expect(roster.t).toBe('lobby');
 		host.close();
 		guest.close();
+	});
+
+	it('a malformed frame errors and closes the socket, but the server survives', async () => {
+		const c = new WsClient(server.port);
+		await c.opened();
+		const closed = Promise.withResolvers<number>();
+		c.ws.once('close', (code: number) => closed.resolve(code));
+		c.ws.send('{"t":"join"}'); // no room field — used to crash the whole process
+		await c.waitFor((m) => m.t === 'error' && m.code === 'bad_request');
+		expect(await closed.promise).toBe(1008);
+		// The process is still healthy: a fresh socket can create a room.
+		const c2 = new WsClient(server.port);
+		await c2.opened();
+		c2.send({ t: 'create', sid: 'sid-after', name: 'After' });
+		await c2.waitFor((m) => m.t === 'lobby');
+		c.close();
+		c2.close();
+	});
+
+	it('throttles database-backed restores for unknown rooms', async () => {
+		const c = new WsClient(server.port);
+		await c.opened();
+		// 20 restores/s pass through to (absent) Postgres and report not-found;
+		// the 21st in the window is refused with 1013 Try Again Later.
+		for (let i = 0; i < 20; i++) {
+			c.send({ t: 'join', room: `Z${String(i).padStart(3, '0')}`, sid: `s${i}`, name: 'p' });
+		}
+		for (let i = 0; i < 20; i++) {
+			const err = await c.waitFor((m) => m.t === 'error' && m.code === 'room_not_found');
+			expect(err.t).toBe('error');
+		}
+		const closed = Promise.withResolvers<number>();
+		c.ws.once('close', (code: number) => closed.resolve(code));
+		c.send({ t: 'join', room: 'Z999', sid: 'sx', name: 'p' });
+		expect(await closed.promise).toBe(1013);
 	});
 });

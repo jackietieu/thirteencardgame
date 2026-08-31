@@ -39,6 +39,13 @@ function joinFour(room: ReturnType<typeof makeRoom>) {
 	return seats;
 }
 
+/** The seat token issued in the first lobby/state snapshot sent to this conn. */
+function tokenOf(conn: FakeConn): string {
+	const m = conn.sent.find((x) => x.t === 'lobby' || x.t === 'state');
+	if (!m || (m.t !== 'lobby' && m.t !== 'state')) throw new Error('no seat token issued');
+	return m.seatToken;
+}
+
 /** Advances fake time past one bot delay while bots keep having the turn. */
 function runDueBot(room: ReturnType<typeof makeRoom>, maxChained = 4) {
 	for (let i = 0; i < maxChained; i++) {
@@ -108,9 +115,10 @@ describe('room', () => {
 		const room = makeRoom();
 		const host = new FakeConn();
 		room.join('P0', 'sid-0', host);
-		room.join('P1', 'sid-1', new FakeConn());
+		const p1 = new FakeConn();
+		room.join('P1', 'sid-1', p1);
 		host.sent.length = 0;
-		room.join('Ace', 'sid-1', new FakeConn());
+		room.join('Ace', 'sid-1', new FakeConn(), undefined, tokenOf(p1));
 		const lobbies = host.sent.filter((m) => m.t === 'lobby');
 		expect(lobbies).toHaveLength(1);
 		expect(lobbies[0]).toMatchObject({ players: ['P0', 'Ace', '', ''] });
@@ -185,7 +193,7 @@ describe('room', () => {
 		playHand(room, seats);
 		room.disconnect(seats[1]!);
 		const rejoin = new FakeConn();
-		expect(room.join('P1', 'sid-1', rejoin)).toBe(1);
+		expect(room.join('P1', 'sid-1', rejoin, undefined, tokenOf(seats[1]!))).toBe(1);
 		const snapshot = rejoin.last!;
 		expect(snapshot.t).toBe('state');
 		if (snapshot.t === 'state') {
@@ -196,6 +204,19 @@ describe('room', () => {
 		expect(room.seatIsBot(1)).toBe(false);
 	});
 
+	it('a stolen sid without the seat token cannot reclaim a seat', () => {
+		const room = makeRoom();
+		const seats = joinFour(room);
+		room.start(seats[0]!);
+		playHand(room, seats);
+		room.disconnect(seats[1]!);
+		const thief = new FakeConn();
+		expect(room.join('P1', 'sid-1', thief, undefined, 'wrong-token')).toBeNull();
+		expect(thief.sent).toHaveLength(0); // no snapshot leaked to the impostor
+		// The legitimate token still reclaims.
+		const owner = new FakeConn();
+		expect(room.join('P1', 'sid-1', owner, undefined, tokenOf(seats[1]!))).toBe(1);
+	});
 	it('a reclaimed seat accepts a fresh action counter after a page reload', () => {
 		const room = makeRoom();
 		const seats = joinFour(room);
@@ -203,8 +224,7 @@ describe('room', () => {
 		playHand(room, seats);
 		room.disconnect(seats[1]!);
 		const rejoin = new FakeConn();
-		room.join('P1', 'sid-1', rejoin);
-		// Drive play until seat 1 must act, then send with a brand-new counter.
+		room.join('P1', 'sid-1', rejoin, undefined, tokenOf(seats[1]!));
 		for (let i = 0; i < 200; i++) {
 			let state = room.state!;
 			if (state.phase === 'handOver') {
@@ -284,8 +304,7 @@ describe('room', () => {
 		const room = makeRoom();
 		const seats = joinFour(room);
 		room.disconnect(seats[1]!);
-		room.join('P1', 'sid-1', new FakeConn());
-		vi.advanceTimersByTime(GRACE + 1);
+		room.join('P1', 'sid-1', new FakeConn(), undefined, tokenOf(seats[1]!));
 		const lobby = room.lobbyMessage(0);
 		expect(lobby.t === 'lobby' && lobby.players).toEqual(['P0', 'P1', 'P2', 'P3']);
 	});
@@ -397,7 +416,7 @@ describe('room', () => {
 		expect(makeRoomCode(() => 0)).toBe('AAAA');
 	});
 
-	it('gates new joins behind the lobby password but exempts sid reclaim', () => {
+	it('gates new joins behind the lobby password but exempts seat-token reclaim', () => {
 		const room = new Room({ code: 'PW', password: 'sesame', seed: 42 });
 		const host = new FakeConn();
 		room.join('Ann', 'sid-a', host);
@@ -412,7 +431,7 @@ describe('room', () => {
 		expect(room.join('Ben', 'sid-b', good, 'sesame')).toBe(1);
 
 		// Reload: same sid, no password — reclaims the seat instead of erroring.
-		expect(room.join('Ben', 'sid-b', good)).toBe(1);
+		expect(room.join('Ben', 'sid-b', good, undefined, tokenOf(good))).toBe(1);
 	});
 
 
@@ -461,7 +480,7 @@ describe('room', () => {
 		expect(seats[1]!.sent.filter((m) => m.t === 'chat')).toHaveLength(0);
 		// Blocked messages do not enter history.
 		const back = new FakeConn();
-		room.join('P0', 'sid-0', back);
+		room.join('P0', 'sid-0', back, undefined, tokenOf(seats[0]!));
 		expect(back.sent.filter((m) => m.t === 'chat')).toHaveLength(0);
 	});
 
@@ -471,7 +490,7 @@ describe('room', () => {
 		await room.chat(seats[0]!, 'from seat 0');
 		await room.chat(seats[2]!, 'from seat 2');
 		const back = new FakeConn();
-		room.join('P0', 'sid-0', back); // sid reclaim after a drop
+		room.join('P0', 'sid-0', back, undefined, tokenOf(seats[0]!)); // sid reclaim after a drop
 		const chats = back.sent.filter((m) => m.t === 'chat');
 		expect(chats).toHaveLength(2);
 		expect(chats[0]).toMatchObject({ t: 'chat', seat: 0, name: 'P0', text: 'from seat 0' });
@@ -493,7 +512,7 @@ describe('room', () => {
 			vi.advanceTimersByTime(2500); // stay under the flood guard
 		}
 		const back = new FakeConn();
-		room.join('P0', 'sid-0', back);
+		room.join('P0', 'sid-0', back, undefined, tokenOf(seats[0]!));
 		const chats = back.sent.filter((m) => m.t === 'chat');
 		expect(chats).toHaveLength(50);
 		expect(chats[0]).toMatchObject({ text: 'm5' });

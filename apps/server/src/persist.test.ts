@@ -60,8 +60,11 @@ describe.skipIf(!process.env.DATABASE_URL)('room persistence (postgres)', () => 
 		expect(restored).not.toBeNull();
 		expect(restored!.state).toStrictEqual(room.state);
 
-		// The guest's sid reclaims the seat on the restored room — refresh works.
-		const seat = restored!.join('Ben', 'sid-b', guest);
+		// The guest's sid + seat token reclaim the seat on the restored room —
+		// refresh works.
+		const lobby = guest.sent.find((m) => m.t === 'lobby');
+		const token = lobby && lobby.t === 'lobby' ? lobby.seatToken : '';
+		const seat = restored!.join('Ben', 'sid-b', guest, undefined, token);
 		expect(seat).toBe(1);
 		const stateMsg = guest.sent.filter((m) => m.t === 'state').at(-1);
 		expect(stateMsg).toMatchObject({ t: 'state', seat: 1 });

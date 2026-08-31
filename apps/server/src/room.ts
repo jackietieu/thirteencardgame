@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { greedyBot } from '@thirteen/bots';
 import {
 	applyMove,
@@ -24,6 +24,8 @@ export interface SeatConn {
 interface Seat {
 	name: string;
 	sid: string;
+	/** Secret presented on join to reclaim this seat; '' for bots. */
+	token: string;
 	/** null while the seat is a server-driven bot. */
 	conn: SeatConn | null;
 	bot: boolean;
@@ -104,10 +106,6 @@ export class Room {
 		return this.liveHumanCount() === 0;
 	}
 
-	/** True if `sid` belongs to a seat in this room (reconnect support). */
-	hasSid(sid: string): boolean {
-		return this.seats.some((s) => s !== null && s.sid === sid);
-	}
 
 	phase(): 'lobby' | 'playing' {
 		return this.state === null ? 'lobby' : 'playing';
@@ -120,6 +118,7 @@ export class Room {
 			players: this.seats.map((s) => s?.name ?? ''),
 			bots: this.seats.map((s) => s?.bot ?? false),
 			seat,
+			seatToken: this.seats[seat]?.token ?? '',
 			hostSeat: this.hostSeat(),
 			phase: 'lobby'
 		};
@@ -136,6 +135,7 @@ export class Room {
 			t: 'state',
 			seq: this.seq,
 			seat,
+			seatToken: s.token,
 			// Rotate so the recipient renders themselves at the bottom.
 			seatNames: Array.from({ length: 4 }, (_, d) => this.seats[mod4(d + seat)]?.name ?? ''),
 			state: viewForSeat(this.state!, seat) as SeatView
@@ -158,7 +158,7 @@ export class Room {
 	 *  snapshot can never overwrite a newer one. */
 	private persist() {
 		const seats = this.seats.map((s): PersistedSeat | null =>
-			s ? { name: s.name, sid: s.sid, bot: s.bot, lastSeq: s.lastSeq } : null
+			s ? { name: s.name, sid: s.sid, token: s.token, bot: s.bot, lastSeq: s.lastSeq } : null
 		);
 		const payload = { passwordHash: this.passwordHash, state: this.state, seats };
 		this.persistTail = this.persistTail.then(
@@ -191,7 +191,7 @@ export class Room {
 		room.seats = Array.from({ length: 4 }, (_, i) => {
 			const s = row.seats[i];
 			return s
-				? { name: s.name, sid: s.sid, conn: null, bot: s.bot, lastSeq: s.lastSeq, disconnectTimer: undefined }
+				? { name: s.name, sid: s.sid, token: s.token ?? randomUUID(), conn: null, bot: s.bot, lastSeq: s.lastSeq, disconnectTimer: undefined }
 				: null;
 		});
 		for (let seat = 0; seat < 4; seat++) room.armDisconnect(seat);
@@ -251,12 +251,13 @@ export class Room {
 	}
 
 	/**
-	 * Attaches a human. Rejoins by `sid` reclaim the same seat (mid-game reload);
-	 * otherwise the first open seat is assigned — gated by the lobby password.
-	 * Returns the seat, or null when the room is full.
+	 * Attaches a human. Rejoins presenting the seat token issued at first join
+	 * (with the matching sid) reclaim the same seat — mid-game reloads; a sid
+	 * alone proves nothing. Everyone else takes the first open seat, gated by
+	 * the lobby password. Returns the seat, or null when the room is full.
 	 */
-	join(name: string, sid: string, conn: SeatConn, password?: string): number | null {
-		const existing = this.seats.findIndex((s) => s !== null && s.sid === sid);
+	join(name: string, sid: string, conn: SeatConn, password?: string, token?: string): number | null {
+		const existing = this.seats.findIndex((s) => s !== null && s.sid === sid && s.token !== '' && s.token === token);
 		if (existing !== -1) {
 			const s = this.seats[existing]!;
 			const renamed = Boolean(name) && s.name !== name;
@@ -300,7 +301,7 @@ export class Room {
 			open = this.seats.findIndex((s) => s !== null && s.bot);
 		}
 		if (open === -1) return null;
-		this.seats[open] = { name, sid, conn, bot: false, lastSeq: 0, disconnectTimer: undefined };
+		this.seats[open] = { name, sid, token: randomUUID(), conn, bot: false, lastSeq: 0, disconnectTimer: undefined };
 		void upsertPlayer(sid, name);
 		this.persist();
 		// New seats only open up in the lobby (mid-game seats are always
@@ -394,6 +395,7 @@ export class Room {
 				this.seats[seat] = {
 					name: BOT_NAMES[seat % BOT_NAMES.length]!,
 					sid: `bot:${this.code}:${seat}`,
+					token: '',
 					conn: null,
 					bot: true,
 					lastSeq: 0,

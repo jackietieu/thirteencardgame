@@ -25,11 +25,51 @@ export interface ServerOptions {
 	msgBurst?: number;
 }
 
+/** Room codes are 4 chars from makeRoomCode's unambiguous alphabet. */
+const ROOM_CODE_RE = /^[A-Z0-9]{4}$/;
+
+/**
+ * Field-level validation before any room logic runs. Returns the error code
+ * for a malformed message (protocol violation → the socket is closed) or
+ * null when the message is well-formed.
+ */
+function validateMessage(msg: ClientMessage): string | null {
+	switch (msg.t) {
+		case 'create':
+		case 'join':
+			if (typeof msg.name !== 'string' || typeof msg.sid !== 'string') return 'bad_request';
+			if (msg.password !== undefined && typeof msg.password !== 'string') return 'bad_request';
+			if (msg.t === 'join') {
+				if (typeof msg.room !== 'string' || !ROOM_CODE_RE.test(msg.room.toUpperCase())) {
+					return 'bad_request';
+				}
+				if (msg.token !== undefined && typeof msg.token !== 'string') return 'bad_request';
+			}
+			return null;
+		case 'action':
+			if (!Number.isInteger(msg.seq) || msg.seq < 1) return 'bad_request';
+			if (typeof msg.action !== 'object' || msg.action === null) return 'bad_request';
+			return null;
+		case 'kick':
+			return Number.isInteger(msg.seat) && msg.seat >= 0 && msg.seat <= 3 ? null : 'bad_request';
+		case 'chat':
+			return typeof msg.text === 'string' ? null : 'bad_request';
+		case 'start':
+		case 'nextHand':
+		case 'leave':
+		case 'ping':
+			return null;
+		default:
+			return 'bad_request';
+	}
+}
+
 /** WS frame handling for one connected socket. */
 function serveSocket(
 	ws: WebSocket,
 	rooms: Map<string, Room>,
-	limits: { rate: number; burst: number; maxRooms: number }
+	limits: { rate: number; burst: number; maxRooms: number },
+	restoreRoom: (code: string) => Promise<Room | null | undefined>
 ) {
 	let joined: { room: Room; conn: SeatConn } | undefined;
 	const send = (msg: ServerMessage) => ws.send(JSON.stringify(msg));
@@ -53,7 +93,6 @@ function serveSocket(
 	ws.on('close', () => {
 		if (joined) joined.room.disconnect(seatConn);
 	});
-
 	ws.on('message', async (raw) => {
 		// Rate gate first: floods die before JSON parsing or room work.
 		if (!allowMessage()) {
@@ -68,6 +107,25 @@ function serveSocket(
 			send({ t: 'error', code: 'bad_json', on: -1 });
 			return;
 		}
+		const bad = validateMessage(msg);
+		if (bad) {
+			// Protocol violation: no unvalidated field ever reaches room logic
+			// (a wrong-typed field used to throw in here and kill the process).
+			send({ t: 'error', code: bad, on: -1 });
+			ws.close(1008, 'bad request');
+			return;
+		}
+		try {
+			await handle(msg);
+		} catch {
+			// Backstop: no client message may crash the process via an
+			// unhandled rejection; tear the socket down instead.
+			send({ t: 'error', code: 'bad_request', on: -1 });
+			ws.close(1008, 'bad request');
+		}
+	});
+
+	async function handle(msg: ClientMessage): Promise<void> {
 		if (joined) {
 			const { room, conn } = joined;
 			switch (msg.t) {
@@ -106,15 +164,24 @@ function serveSocket(
 				const code = msg.room.toUpperCase();
 				let room: Room | null | undefined = rooms.get(code);
 				if (!room) {
+					if (rooms.size >= limits.maxRooms) {
+						return send({ t: 'error', code: 'server_full', on: -1 });
+					}
 					// Not in memory — a refresh/rejoin after a server restart can
 					// still resume the game from the persisted snapshot.
-					room = await Room.restore(code);
+					room = await restoreRoom(code);
 					if (room) rooms.set(code, room);
+					else if (room === undefined) {
+						// Restore quota exhausted (unknown-room flood guard): drop the
+						// socket so the client's reconnect backoff retries the join.
+						return ws.close(1013, 'try again later');
+					} else {
+						return send({ t: 'error', code: 'room_not_found', on: -1 });
+					}
 				}
-				if (!room) return send({ t: 'error', code: 'room_not_found', on: -1 });
 				let seat: number | null;
 				try {
-					seat = room.join(msg.name, msg.sid, seatConn, msg.password);
+					seat = room.join(msg.name, msg.sid, seatConn, msg.password, msg.token);
 				} catch (err) {
 					if (err instanceof RoomError) return send({ t: 'error', code: err.code, on: -1 });
 					throw err;
@@ -126,7 +193,7 @@ function serveSocket(
 			default:
 				return send({ t: 'error', code: 'not_joined', on: -1 });
 		}
-	});
+	}
 }
 
 /**
@@ -141,6 +208,31 @@ export function startServer(options: ServerOptions = {}): Promise<ServerHandle> 
 		rate: options.msgRatePerSec ?? 20,
 		burst: options.msgBurst ?? 40
 	};
+	// Restore lookups hit Postgres once per unknown room code — a flood of
+	// joins with random codes would otherwise hammer the DB. Shared token
+	// bucket plus in-flight dedupe (concurrent joins of one code pay once).
+	// Resolves undefined when the budget is exhausted (caller: drop the
+	// socket so the client retries), null when no such room exists.
+	const RESTORES_PER_SEC = 20;
+	let restoreTokens = RESTORES_PER_SEC;
+	let restoreRefill = Date.now();
+	const restoreInFlight = new Map<string, Promise<Room | null | undefined>>();
+	const restoreRoom = async (code: string): Promise<Room | null | undefined> => {
+		const now = Date.now();
+		restoreTokens = Math.min(
+			RESTORES_PER_SEC,
+			restoreTokens + ((now - restoreRefill) / 1000) * RESTORES_PER_SEC
+		);
+		restoreRefill = now;
+		if (restoreTokens < 1) return undefined;
+		restoreTokens -= 1;
+		let pending = restoreInFlight.get(code);
+		if (!pending) {
+			pending = Room.restore(code).finally(() => restoreInFlight.delete(code));
+			restoreInFlight.set(code, pending);
+		}
+		return pending;
+	};
 	const sweep = setInterval(() => {
 		for (const [code, room] of rooms) {
 			if (room.isEmpty() && room.phase() === 'lobby') {
@@ -154,7 +246,7 @@ export function startServer(options: ServerOptions = {}): Promise<ServerHandle> 
 	// maxPayload kills oversized frames at the protocol level (close 1009) —
 	// no client message legitimately approaches 4 KiB.
 	const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
-	wss.on('connection', (ws: WebSocket) => serveSocket(ws, rooms, limits));
+	wss.on('connection', (ws: WebSocket) => serveSocket(ws, rooms, limits, restoreRoom));
 
 	const http = createServer((_req, res) => {
 		res.writeHead(200, { 'content-type': 'application/json' });

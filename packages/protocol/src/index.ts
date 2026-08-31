@@ -33,6 +33,9 @@ export interface ClientJoin {
 	name: string;
 	/** Required when the room was created with a lobby password. */
 	password?: string;
+	/** Seat token issued by the server on first join; presenting it (with the
+	 *  sid) reclaims the seat across reloads and reconnects. */
+	token?: string;
 }
 
 export interface ClientAction {
@@ -90,6 +93,8 @@ export interface ServerLobby {
 	seat: number;
 	/** Seat of the room host (who may start the game). */
 	hostSeat: number;
+	/** Secret seat token: present it on join to reclaim this seat. */
+	seatToken: string;
 	phase: 'lobby';
 }
 
@@ -99,6 +104,8 @@ export interface ServerState {
 	seq: number;
 	/** Your seat in room coordinates. */
 	seat: number;
+	/** Secret seat token: present it on join to reclaim this seat. */
+	seatToken: string;
 	/** Seat-ordered display names, rotated so you are index 0. */
 	seatNames: string[];
 	state: SeatView;

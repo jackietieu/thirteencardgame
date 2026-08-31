@@ -14,6 +14,7 @@ export interface ChatMsg {
 type Status = 'idle' | 'connecting' | 'lobby' | 'playing' | 'reconnecting';
 const SID_KEY = 'thirteen.sid';
 const ROOM_KEY = 'thirteen.room';
+const TOKEN_PREFIX = 'thirteen.token.';
 
 function getSid(): string {
 	let sid = localStorage.getItem(SID_KEY);
@@ -34,11 +35,26 @@ function saveRoom(room: string) {
 	else localStorage.removeItem(ROOM_KEY);
 }
 
+/** The server issues a seat token per room: presenting it (with the sid) is
+ *  what reclaims the seat, so a leaked sid alone cannot hijack a player. */
+function getToken(room: string): string {
+	return localStorage.getItem(TOKEN_PREFIX + room) ?? '';
+}
+
+function saveToken(room: string, token: string) {
+	if (room && token) localStorage.setItem(TOKEN_PREFIX + room, token);
+}
+
+function clearToken(room: string) {
+	if (room) localStorage.removeItem(TOKEN_PREFIX + room);
+}
+
 
 /**
  * Online driver: speaks the room protocol over WS. The server is
  * authoritative — this store renders snapshots (already rotated per seat) and
- * forwards intents. Reloads resume the seat via the stable sid + saved room.
+ * forwards intents. Reloads resume the seat via the stable sid + saved room +
+ * seat token.
  */
 function wsUrl(): string {
 	// Hosted: point VITE_GAME_WS_URL at the game server (wss://…). Unset —
@@ -106,7 +122,7 @@ class OnlineGameStore implements GameDriver {
 		const room = code.trim().toUpperCase();
 		this.creating = false;
 		this.connect((ws) =>
-			ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player', password }))
+			ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player', password, token: getToken(room) || undefined }))
 		);
 	}
 
@@ -177,7 +193,7 @@ class OnlineGameStore implements GameDriver {
 		const room = this.lastRoom || getSavedRoom();
 		if (room && this.status === 'reconnecting') {
 			this.openSocket((ws) =>
-				ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player' }))
+				ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player', token: getToken(room) || undefined }))
 			);
 			// The server replays chat history for the fresh join: drop local
 			this.chat = [];
@@ -198,6 +214,7 @@ class OnlineGameStore implements GameDriver {
 				this.lobbyBots = msg.bots;
 				this.mySeat = msg.seat;
 				this.hostSeat = msg.hostSeat;
+				saveToken(msg.room, msg.seatToken);
 				return;
 			case 'state': {
 				const prev = this.state;
@@ -206,6 +223,7 @@ class OnlineGameStore implements GameDriver {
 				this.lastRoom = this.room;
 				saveRoom(this.room);
 				this.mySeat = msg.seat;
+				saveToken(this.room, msg.seatToken);
 				this.seatNames = msg.seatNames;
 				this.state = msg.state;
 				// A fresh hand arrived (start, next hand, or rejoin mid-deal): animate.
@@ -230,8 +248,10 @@ class OnlineGameStore implements GameDriver {
 				if (msg.name === 'kicked') {
 					// Rotated display seat 0 = me: the host removed this client.
 					if (msg.seat === 0) {
+						const room = this.lastRoom;
 						this.openHandler = null;
 						this.lastRoom = '';
+						clearToken(room);
 						saveRoom('');
 						this.teardown();
 						this.lastError = 'kicked';
@@ -252,7 +272,10 @@ class OnlineGameStore implements GameDriver {
 				const rejectedJoin =
 					this.state === null &&
 					(msg.code === 'bad_password' || msg.code === 'room_not_found' || msg.code === 'room_full' || msg.code === 'server_full');
-				if (msg.code === 'room_not_found') saveRoom('');
+				if (msg.code === 'room_not_found') {
+					clearToken(this.lastRoom);
+					saveRoom('');
+				}
 				if (rejectedJoin) {
 					const code = msg.code;
 					this.openHandler = null;
@@ -281,7 +304,9 @@ class OnlineGameStore implements GameDriver {
 		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
 			this.ws.send(JSON.stringify({ t: 'leave' }));
 		}
+		const room = this.lastRoom;
 		this.lastRoom = '';
+		clearToken(room);
 		saveRoom('');
 		this.teardown();
 	}

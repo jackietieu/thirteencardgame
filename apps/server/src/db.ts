@@ -59,6 +59,9 @@ export async function ensureSchema(): Promise<void> {
 export interface PersistedSeat {
 	name: string;
 	sid: string;
+	/** Issued at seat creation; present it on join to reclaim the seat.
+	 *  Optional for rows persisted before tokens existed. */
+	token?: string;
 	bot: boolean;
 	lastSeq: number;
 }
