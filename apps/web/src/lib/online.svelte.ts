@@ -66,8 +66,6 @@ class OnlineGameStore implements GameDriver {
 	lobbyPlayers = $state<string[]>([]);
 	lobbyBots = $state<boolean[]>([]);
 	chat = $state<ChatMsg[]>([]);
-	/** Messages arrived while the chat panel was closed. */
-	chatUnread = $state(0);
 	/** Set when the server rejects a chat message (moderation). */
 	chatNotice = $state('');
 	/** Heartbeat machinery: half-open sockets must not silently eat frames. */
@@ -103,9 +101,7 @@ class OnlineGameStore implements GameDriver {
 
 	join(code: string, password?: string) {
 		const room = code.trim().toUpperCase();
-		this.needsPassword = false;
 		this.chat = [];
-		this.chatUnread = 0;
 		this.connect((ws) =>
 			ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player', password }))
 		);
@@ -133,9 +129,6 @@ class OnlineGameStore implements GameDriver {
 		if (trimmed) this.send({ t: 'chat', text: trimmed });
 	}
 
-	markChatRead() {
-		this.chatUnread = 0;
-	}
 
 	private openSocket(open: (ws: WebSocket) => void) {
 		const ws = new WebSocket(wsUrl());
@@ -184,9 +177,8 @@ class OnlineGameStore implements GameDriver {
 				ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player' }))
 			);
 			// The server replays chat history for the fresh join: drop local
-			// copies so messages are not duplicated.
 			this.chat = [];
-			this.chatUnread = 0;
+			return;
 			return;
 		}
 		if (this.openHandler) this.openSocket(this.openHandler);
@@ -226,7 +218,6 @@ class OnlineGameStore implements GameDriver {
 				const m: ServerChat = msg;
 				this.chat.push({ seat: m.seat, name: m.name, text: m.text });
 				if (this.chat.length > 100) this.chat.shift();
-				if (m.seat !== 0) this.chatUnread++;
 				return;
 			}
 			case 'pong':
@@ -296,9 +287,7 @@ class OnlineGameStore implements GameDriver {
 		this.status = 'idle';
 		this.state = null;
 		this.log = [];
-		this.chatNotice = '';
 		this.chat = [];
-		this.chatUnread = 0;
 		this.room = '';
 		this.dealing = false;
 		this.dealingPending = false;

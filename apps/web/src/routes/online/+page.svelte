@@ -70,13 +70,14 @@
 		{#snippet nav()}
 			<a href="/play" class="nav-link">{t('nav.vsBots')}</a>
 			<a href="/rules" class="nav-link">{t('nav.rules')}</a>
-			<ChatPanel />
 			{#if online.status !== 'idle'}
 				<button type="button" class="btn-ghost btn-sm" onclick={() => online.leave()}>
 					{t('lobby.leave')}
 				</button>
 			{/if}
-			<LanguagePicker />
+		{/snippet}
+		{#snippet chat()}
+			<ChatPanel />
 		{/snippet}
 	</GameTable>
 {:else}
@@ -96,7 +97,6 @@
 						{t('lobby.leave')}
 					</button>
 				{/if}
-				<ChatPanel />
 				<LanguagePicker />
 			</div>
 		</header>
@@ -273,17 +273,21 @@
 							{t('lobby.waitingHost')}
 						</p>
 					{/if}
-					{#if online.status === 'reconnecting'}
-						<p class="text-sm text-gold">{t('lobby.reconnecting')}</p>
+					{#if online.status === 'connecting' || online.status === 'reconnecting'}
+						<p class="text-sm text-gold" data-testid="reconnecting-text">{t('lobby.reconnecting')}</p>
 					{/if}
 				</section>
 			{/if}
+		</div>
+		<div class="lobby-chat">
+			<ChatPanel />
 		</div>
 	</main>
 {/if}
 
 <style>
 	.lobby {
+		position: relative;
 		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
@@ -299,6 +303,12 @@
 		display: grid;
 		place-items: start center;
 		padding-block: 2rem;
+	}
+	.lobby-chat {
+		position: absolute;
+		right: 0.9rem;
+		bottom: 0.9rem;
+		z-index: 30;
 	}
 	.panel-card {
 		display: flex;

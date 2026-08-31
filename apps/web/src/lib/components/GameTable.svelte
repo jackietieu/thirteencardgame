@@ -27,9 +27,11 @@
 	interface Props {
 		store: GameDriver;
 		nav?: Snippet;
+		/** Always-visible chat dock (online games); rendered in the table's corner. */
+		chat?: Snippet;
 	}
 
-	let { store, nav }: Props = $props();
+	let { store, nav, chat }: Props = $props();
 
 	let selected = $state<Set<string>>(new Set());
 
@@ -285,6 +287,12 @@
 								dealInterval}ms; --back-w: 2.1rem"
 						/>
 					{/each}
+				</div>
+			{/if}
+
+			{#if chat}
+				<div class="chat-anchor">
+					{@render chat()}
 				</div>
 			{/if}
 		</div>

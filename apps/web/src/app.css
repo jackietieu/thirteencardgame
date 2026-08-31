@@ -202,6 +202,12 @@ body {
 	container-type: size;
 	min-height: 0;
 }
+.chat-anchor {
+	position: absolute;
+	right: 2%;
+	bottom: 1.5%;
+	z-index: 20;
+}
 .felt {
 	position: absolute;
 	inset: 3% 3.5%;
