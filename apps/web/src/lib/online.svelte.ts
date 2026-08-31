@@ -77,6 +77,8 @@ class OnlineGameStore implements GameDriver {
 	private lastRoom = '';
 	/** The room requires a lobby password — the join form must show the field. */
 	needsPassword = $state(false);
+	/** True from create() until the server answers with a lobby/state. */
+	creating = $state(false);
 
 	private ws: WebSocket | null = null;
 	private seq = 0;
@@ -94,6 +96,7 @@ class OnlineGameStore implements GameDriver {
 
 	create(password?: string) {
 		this.needsPassword = false;
+		this.creating = true;
 		this.connect((ws) =>
 			ws.send(JSON.stringify({ t: 'create', sid: getSid(), name: getName() || 'Player', password }))
 		);
@@ -101,7 +104,7 @@ class OnlineGameStore implements GameDriver {
 
 	join(code: string, password?: string) {
 		const room = code.trim().toUpperCase();
-		this.chat = [];
+		this.creating = false;
 		this.connect((ws) =>
 			ws.send(JSON.stringify({ t: 'join', room, sid: getSid(), name: getName() || 'Player', password }))
 		);
@@ -187,8 +190,8 @@ class OnlineGameStore implements GameDriver {
 	private onMessage(msg: ServerMessage) {
 		switch (msg.t) {
 			case 'lobby':
+				this.creating = false;
 				this.status = 'lobby';
-				this.room = msg.room;
 				this.lastRoom = msg.room;
 				saveRoom(msg.room);
 				this.lobbyPlayers = msg.players;
@@ -198,8 +201,8 @@ class OnlineGameStore implements GameDriver {
 				return;
 			case 'state': {
 				const prev = this.state;
+				this.creating = false;
 				this.status = 'playing';
-				this.room = this.room || getSavedRoom();
 				this.lastRoom = this.room;
 				saveRoom(this.room);
 				this.mySeat = msg.seat;
@@ -284,8 +287,8 @@ class OnlineGameStore implements GameDriver {
 	}
 
 	private teardown() {
+		this.creating = false;
 		this.status = 'idle';
-		this.state = null;
 		this.log = [];
 		this.chat = [];
 		this.room = '';

@@ -274,7 +274,11 @@
 						</p>
 					{/if}
 					{#if online.status === 'connecting' || online.status === 'reconnecting'}
-						<p class="text-sm text-gold" data-testid="reconnecting-text">{t('lobby.reconnecting')}</p>
+						{#if online.creating}
+							<p class="text-sm text-gold" data-testid="creating-text">{t('lobby.creating')}</p>
+						{:else}
+							<p class="text-sm text-gold" data-testid="reconnecting-text">{t('lobby.reconnecting')}</p>
+						{/if}
 					{/if}
 				</section>
 			{/if}
