@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { game } from '$lib/game.svelte';
 	import { getName, setName } from '$lib/name';
+	import { t } from '$lib/i18n.svelte';
 	import GameTable from '$lib/components/GameTable.svelte';
 
 	let name = $state('');
@@ -26,34 +27,34 @@
 </script>
 
 <svelte:head>
-	<title>Play — Thirteen</title>
+	<title>{t('title.play')}</title>
 </svelte:head>
 
 {#if !named && !game.state}
 	<main class="name-gate">
 		<section class="panel-card" data-testid="name-panel">
 			<form class="flex flex-col gap-2" onsubmit={(e) => { e.preventDefault(); confirmName(); }}>
-				<label class="field-label" for="player-name">Your name</label>
+				<label class="field-label" for="player-name">{t('name.label')}</label>
 				<input
 					id="player-name"
 					data-testid="name-input"
 					class="field-input"
-					placeholder="Your name"
+					placeholder={t('name.placeholder')}
 					maxlength="16"
 					bind:value={name}
 				/>
-				<button type="submit" data-testid="name-submit" class="btn-primary">Start game</button>
+				<button type="submit" data-testid="name-submit" class="btn-primary">{t('name.start')}</button>
 			</form>
 		</section>
 	</main>
 {:else}
 	<GameTable store={game}>
 		{#snippet nav()}
-			<a href="/" class="nav-link">Home</a>
-			<a href="/rules" class="nav-link">Rules</a>
-			<a href="/online" class="nav-link">Online</a>
+			<a href="/" class="nav-link">{t('nav.home')}</a>
+			<a href="/rules" class="nav-link">{t('nav.rules')}</a>
+			<a href="/online" class="nav-link">{t('nav.online')}</a>
 			<button type="button" class="btn-ghost btn-sm" onclick={() => game.newGame()}>
-				New game
+				{t('nav.newGame')}
 			</button>
 		{/snippet}
 	</GameTable>

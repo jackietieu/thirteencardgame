@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Phase } from '@thirteen/engine';
+	import { displayName, t } from '$lib/i18n.svelte';
 	import Avatar from './Avatar.svelte';
 
 	interface Props {
@@ -20,18 +21,17 @@
 		return [...finished, ...left];
 	});
 
-	const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'] as const;
 	/** handNumber is 0-based, so the round that just finished is handNumber + 1. */
-	const roundOrdinal = $derived(ORDINALS[handNumber] ?? `${handNumber + 1}th`);
+	const roundNumber = $derived(handNumber + 1);
 </script>
 
 {#if phase === 'handOver' || phase === 'gameOver'}
 	<div class="overlay">
 		<div class="panel" data-testid="game-over-panel" role="dialog" aria-modal="true">
 			{#if phase === 'gameOver'}
-				<h2 class="panel-title">Game over — {names[winner ?? 0]} wins!</h2>
+				<h2 class="panel-title">{t('place.gameOver', { name: displayName(names[winner ?? 0]) })}</h2>
 			{:else}
-				<h2 class="panel-title">{names[finished[0] ?? placings[0] ?? 0]} won the {roundOrdinal} round!</h2>
+				<h2 class="panel-title">{t('place.roundWon', { name: displayName(names[finished[0] ?? placings[0] ?? 0]), n: roundNumber })}</h2>
 			{/if}
 			<ol class="placings">
 				{#each placings as seat, i (seat)}
@@ -39,16 +39,16 @@
 						<span class="place-rank">{i + 1}</span>
 						<Avatar name={names[seat]} />
 						<span class="place-name">{names[seat]}</span>
-						<span class="place-score">{scores[seat] ?? 0} pts</span>
+						<span class="place-score">{t('place.pts', { n: scores[seat] ?? 0 })}</span>
 					</li>
 				{/each}
 			</ol>
 			{#if phase === 'handOver'}
 				<button type="button" data-testid="next-hand" class="btn-primary" onclick={onNextHand}>
-					Next hand
+					{t('place.nextHand')}
 				</button>
 			{:else}
-				<button type="button" class="btn-primary" onclick={onNextHand}>New game</button>
+				<button type="button" class="btn-primary" onclick={onNextHand}>{t('place.newGame')}</button>
 			{/if}
 		</div>
 	</div>

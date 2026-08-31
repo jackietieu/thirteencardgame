@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { online } from '$lib/online.svelte';
+	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
+	import { t } from '$lib/i18n.svelte';
 	import { getName, setName } from '$lib/name';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -60,20 +62,21 @@
 </script>
 
 <svelte:head>
-	<title>Online — Thirteen</title>
+	<title>{t('title.online')}</title>
 </svelte:head>
 
 {#if online.status === 'playing'}
 	<GameTable store={online}>
 		{#snippet nav()}
-			<a href="/play" class="nav-link">Vs bots</a>
-			<a href="/rules" class="nav-link">Rules</a>
+			<a href="/play" class="nav-link">{t('nav.vsBots')}</a>
+			<a href="/rules" class="nav-link">{t('nav.rules')}</a>
 			<ChatPanel />
 			{#if online.status !== 'idle'}
 				<button type="button" class="btn-ghost btn-sm" onclick={() => online.leave()}>
-					Leave room
+					{t('lobby.leave')}
 				</button>
 			{/if}
+			<LanguagePicker />
 		{/snippet}
 	</GameTable>
 {:else}
@@ -86,14 +89,15 @@
 				<span class="rail-word">Thirteen — Online</span>
 			</div>
 			<div class="ml-auto flex items-center gap-1">
-				<a href="/play" class="nav-link">Vs bots</a>
-				<a href="/rules" class="nav-link">Rules</a>
+				<a href="/play" class="nav-link">{t('nav.vsBots')}</a>
+				<a href="/rules" class="nav-link">{t('nav.rules')}</a>
 				{#if online.status !== 'idle'}
 					<button type="button" class="btn-ghost btn-sm" onclick={() => online.leave()}>
-						Leave room
+						{t('lobby.leave')}
 					</button>
 				{/if}
 				<ChatPanel />
+				<LanguagePicker />
 			</div>
 		</header>
 
@@ -102,17 +106,16 @@
 				<section class="panel-card" data-testid="connect-panel">
 					{#if urlRoom}
 						<p class="text-center text-sm text-ink-muted">
-							Joining room
+							{t('lobby.joining')}
 							<span class="font-display font-bold tracking-widest text-ink">{urlRoom}</span>
 						</p>
 					{/if}
 					<div class="flex flex-col gap-2">
-						<label class="field-label" for="player-name">Your name</label>
+						<label class="field-label" for="player-name">{t('name.label')}</label>
 						<input
 							id="player-name"
 							data-testid="name-input"
-							class="field-input"
-							placeholder="Your name"
+							placeholder={t('name.placeholder')}
 							maxlength="16"
 							bind:value={name}
 						/>
@@ -120,13 +123,12 @@
 					{#if urlRoom}
 						{#if online.needsPassword}
 							<div class="flex flex-col gap-2">
-								<label class="field-label" for="join-password">Room password</label>
+								<label class="field-label" for="join-password">{t('lobby.password')}</label>
 								<input
 									id="join-password"
 									data-testid="join-password-input"
 									type="password"
-									class="field-input"
-									placeholder="Password"
+									placeholder={t('lobby.password.placeholder')}
 									maxlength="24"
 									bind:value={joinPassword}
 								/>
@@ -138,19 +140,18 @@
 							class="btn-primary w-full"
 							onclick={() => join(urlRoom)}
 						>
-							Join game
+							{t('lobby.joinGame')}
 						</button>
 					{:else}
 						<div class="flex flex-col gap-2">
 							<label class="field-label" for="create-password"
-								>Lobby password <span class="font-normal text-ink-subtle">(optional)</span></label
+								>{t('lobby.createPassword')} <span class="font-normal text-ink-subtle">{t('lobby.optional')}</span></label
 							>
 							<input
 								id="create-password"
 								data-testid="create-password-input"
 								type="password"
-								class="field-input"
-								placeholder="Leave empty for an open room"
+								placeholder={t('lobby.createPassword.placeholder')}
 								maxlength="24"
 								bind:value={createPassword}
 							/>
@@ -161,11 +162,11 @@
 							class="btn-primary w-full"
 							onclick={create}
 						>
-							Create room
+							{t('lobby.create')}
 						</button>
 						<div class="flex items-end gap-2">
 							<div class="flex flex-1 flex-col gap-2">
-								<label class="field-label" for="room-code">Room code</label>
+								<label class="field-label" for="room-code">{t('lobby.roomCode')}</label>
 								<input
 									id="room-code"
 									data-testid="room-code-input"
@@ -181,27 +182,27 @@
 								class="btn-ghost"
 								onclick={() => join()}
 							>
-								Join
+								{t('lobby.join')}
 							</button>
 						</div>
 					{/if}
 					{#if online.lastError}
 						<p class="text-center text-sm text-danger" data-testid="connect-error">
 							{online.lastError === 'room_not_found'
-								? 'No room with that code.'
+								? t('err.room_not_found')
 								: online.lastError === 'room_full'
-									? 'Room is full right now — if someone just left, try again in a moment.'
-									: online.lastError === 'bad_password'
-										? 'Wrong password — try again.'
-										: online.lastError === 'kicked'
-											? 'You were removed from the room.'
-											: online.lastError}
+								? t('err.room_full')
+								: online.lastError === 'bad_password'
+									? t('err.bad_password')
+									: online.lastError === 'kicked'
+										? t('err.kicked')
+										: online.lastError}
 						</p>
 					{/if}
 				</section>
 			{:else if online.status === 'lobby' || online.status === 'connecting' || online.status === 'reconnecting'}
 				<section class="panel-card items-center" data-testid="room-panel">
-					<p class="text-sm text-ink-muted">Room code</p>
+					<p class="text-sm text-ink-muted">{t('lobby.roomCode')}</p>
 					<p
 						class="font-display text-4xl font-bold tracking-[0.3em] text-ink"
 						data-testid="room-code"
@@ -223,7 +224,7 @@
 								class="btn-ghost btn-sm shrink-0"
 								onclick={copyLink}
 							>
-								{copied ? 'Copied!' : 'Copy link'}
+								{copied ? t('lobby.copied') : t('lobby.copy')}
 							</button>
 						</div>
 					{/if}
@@ -238,22 +239,22 @@
 									{#if player !== ''}
 										<Avatar name={player} />
 									{/if}
-									{player === '' ? 'Empty seat' : player}
-									{#if player === ''}<span class="text-xs text-ink-subtle">bot will fill</span>{/if}
-									{i === online.mySeat ? ' (you)' : ''}
+									{player === '' ? t('lobby.emptySeat') : player}
+									{#if player === ''}<span class="text-xs text-ink-subtle">{t('lobby.botWillFill')}</span>{/if}
+									{i === online.mySeat ? ` ${t('lobby.you')}` : ''}
 								</span>
-							{#if online.lobbyBots[i]}
-								<span class="text-xs text-ink-subtle">bot</span>
-							{:else if player !== '' && online.mySeat === online.hostSeat && i !== online.mySeat}
-								<button
-									type="button"
-									class="btn-ghost btn-sm"
-									data-testid="kick-button"
-									onclick={() => online.kick(i)}
-								>
-									Kick
-								</button>
-							{/if}
+								{#if online.lobbyBots[i]}
+									<span class="text-xs text-ink-subtle">{t('lobby.bot')}</span>
+								{:else if player !== '' && online.mySeat === online.hostSeat && i !== online.mySeat}
+									<button
+										type="button"
+										class="btn-ghost btn-sm"
+										data-testid="kick-button"
+										onclick={() => online.kick(i)}
+									>
+										{t('lobby.kick')}
+									</button>
+								{/if}
 							</li>
 						{/each}
 					</ul>
@@ -264,16 +265,16 @@
 							class="btn-primary"
 							onclick={() => online.start()}
 						>
-							Start game
+							{t('lobby.start')}
 						</button>
-						<p class="text-xs text-ink-subtle">Empty seats are filled with bots.</p>
+						<p class="text-xs text-ink-subtle">{t('lobby.botsFillNote')}</p>
 					{:else}
 						<p class="text-sm text-ink-muted" data-testid="waiting-text">
-							Waiting for the host to start…
+							{t('lobby.waitingHost')}
 						</p>
 					{/if}
 					{#if online.status === 'reconnecting'}
-						<p class="text-sm text-gold">Reconnecting…</p>
+						<p class="text-sm text-gold">{t('lobby.reconnecting')}</p>
 					{/if}
 				</section>
 			{/if}

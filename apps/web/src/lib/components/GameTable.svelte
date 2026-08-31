@@ -3,12 +3,12 @@
 		canPass as engineCanPass,
 		classify,
 		currentRequirement,
-		describeMove,
 		validateMove,
 		type Card,
 		type Move
 	} from '@thirteen/engine';
 	import type { Snippet } from 'svelte';
+	import { describeMoveI18n, t } from '$lib/i18n.svelte';
 	import { DEAL_INTERVAL_FAST_MS, DEAL_INTERVAL_MS } from '$lib/game.svelte';
 	import type { GameDriver } from '$lib/driver';
 	import { cardKey, participatingCards } from '$lib/highlight';
@@ -21,6 +21,7 @@
 	import Rail from '$lib/components/Rail.svelte';
 	import Seat from '$lib/components/Seat.svelte';
 	import TrickPile from '$lib/components/TrickPile.svelte';
+	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
 	import TurnBanner from '$lib/components/TurnBanner.svelte';
 
 	interface Props {
@@ -75,29 +76,29 @@
 
 	const summary = $derived.by(() => {
 		if (selected.size === 0) return null;
-		if (selectedMove === null) return 'Not a valid combination';
-		return describeMove(selectedMove);
+		if (selectedMove === null) return t('combo.invalid');
+		return describeMoveI18n(selectedMove);
 	});
 
 	const reason = $derived.by(() => {
 		if (!store.myTurn || selected.size === 0) return null;
-		if (selectedMove === null) return 'That selection is not a valid combination.';
+		if (selectedMove === null) return t('reason.invalid_combo');
 		const error = store.state ? validateMove(store.state, 0, selectedMove) : 'not_your_turn';
 		switch (error) {
 			case null:
 				return null;
 			case 'invalid_combo':
-				return 'That selection is not a valid combination.';
+				return t('reason.invalid_combo');
 			case 'does_not_beat':
 				return requirement
-					? `That doesn't beat ${describeMove(requirement)}.`
-					: "That doesn't beat the current play.";
+					? t('reason.does_not_beat', { move: describeMoveI18n(requirement) })
+					: t('reason.does_not_beat_generic');
 			case 'opening_requires_3spades':
-				return 'The first play of the game must include the 3♠.';
+				return t('reason.opening_requires_3spades');
 			case 'already_passed':
-				return 'You already passed this trick.';
+				return t('reason.already_passed');
 			default:
-				return 'You cannot play that right now.';
+				return t('reason.generic');
 		}
 	});
 
@@ -206,6 +207,7 @@
 {#snippet railRight()}
 	{@render nav?.()}
 	<LogDrawer log={store.log} names={store.seatNames} />
+	<LanguagePicker />
 {/snippet}
 
 <svelte:window onkeydown={onKeydown} />
@@ -275,7 +277,7 @@
 
 			{#if store.dealing && dealTargets.length === 52}
 				<div class="pointer-events-none absolute inset-0 z-30" aria-hidden="true">
-					<p class="deal-label">Dealing… {store.dealProgress}/52</p>
+					<p class="deal-label">{t('deal.progress', { n: store.dealProgress })}</p>
 					{#each dealTargets as target, i (i)}
 						<CardBack
 							class="deal-card"
@@ -289,7 +291,9 @@
 
 		<div class="dock">
 			<div class="dock-prompt">
-				<TurnBanner state={store.state} names={store.seatNames} />
+				{#if interacting}
+					<TurnBanner state={store.state} names={store.seatNames} />
+				{/if}
 			</div>
 			<div class="dock-actions">
 				{#if store.state.phase === 'playing'}
@@ -333,7 +337,7 @@
 		<div class="rail"></div>
 		<div class="table">
 			<Felt />
-			<p class="deal-label">Dealing…</p>
+			<p class="deal-label">{t('deal.waiting')}</p>
 		</div>
 		<div class="dock"></div>
 	</div>

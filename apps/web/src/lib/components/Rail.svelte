@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Phase } from '@thirteen/engine';
 	import type { Snippet } from 'svelte';
+	import { displayName, t } from '$lib/i18n.svelte';
 
 	interface Props {
 		scores: number[];
@@ -26,7 +27,7 @@
 		>
 		<span class="rail-word">Thirteen</span>
 	</div>
-	<span class="rail-hand">Hand {handNumber + 1}</span>
+	<span class="rail-hand">{t('rail.hand', { n: handNumber + 1 })}</span>
 	<div class="flex items-center gap-1.5" data-testid="scoreboard">
 		{#each names as name, seat (name)}
 			<span
@@ -36,7 +37,7 @@
 					? 'chip-done'
 					: ''}"
 			>
-				<span class="score-name">{name}:</span>
+				<span class="score-name">{displayName(name)}:</span>
 				<span class="score-num">{scores[seat] ?? 0}</span>
 			</span>
 		{/each}
@@ -44,10 +45,10 @@
 	<div class="ml-auto flex items-center gap-1">
 		{#if phase === 'gameOver'}
 			<div data-testid="game-over" class="mr-1 flex items-center gap-2">
-				<span class="font-display text-sm font-bold text-gold">{names[winner ?? 0]} wins!</span>
+				<span class="font-display text-sm font-bold text-gold">{t('rail.wins', { name: displayName(names[winner ?? 0]) })}</span>
 			</div>
 		{:else if phase === 'handOver'}
-			<span class="mr-1 text-sm text-ink-muted">Hand over</span>
+			<span class="mr-1 text-sm text-ink-muted">{t('rail.handOver')}</span>
 		{/if}
 		{@render nav?.()}
 	</div>

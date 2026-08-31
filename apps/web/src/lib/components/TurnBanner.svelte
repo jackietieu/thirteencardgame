@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { currentRequirement, describeMove, type RulesState } from '@thirteen/engine';
-
+	import { currentRequirement, type RulesState } from '@thirteen/engine';
+	import { describeMoveI18n, displayName, t } from '$lib/i18n.svelte';
 	interface Props {
 		state: RulesState;
 		names: string[];
@@ -22,15 +22,15 @@
 		{#if yourTurn}
 			<span class="prompt-bullet pulse-dot" aria-hidden="true"></span>
 			{#if requirement}
-				<span>Your turn — beat {describeMove(requirement)} or pass</span>
+				<span>{t('turn.beat', { move: describeMoveI18n(requirement) })}</span>
 			{:else if opening}
-				<span>Your turn — first play must include the 3♠</span>
+				<span>{t('turn.opening')}</span>
 			{:else}
-				<span>Your turn — lead any combination</span>
+				<span>{t('turn.lead')}</span>
 			{/if}
 		{:else if state.turn >= 0}
-			<span class="prompt-wait">Waiting for {names[state.turn]}…</span>
-		{/if}
+			<span class="prompt-wait">{t('turn.waiting', { name: displayName(names[state.turn]) })}</span>
+			{/if}
 	</div>
 {/if}
 

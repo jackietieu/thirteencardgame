@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { cardLabel, cardName, rankLabel, SUIT_GLYPHS, type Card } from '@thirteen/engine';
+	import { cardLabel, rankLabel, SUIT_GLYPHS, type Card } from '@thirteen/engine';
+	import { cardNameI18n } from '$lib/i18n.svelte';
 
 	interface Props {
 		card: Card;
@@ -31,7 +32,7 @@
 		{rankLabel(card.rank)}{SUIT_GLYPHS[card.suit]}
 	</span>
 {:else if size === 'table'}
-	<div class="card-face table-card {isRed ? 'card-red' : ''}" role="img" aria-label={cardName(card)}>
+	<div class="card-face table-card {isRed ? 'card-red' : ''}" role="img" aria-label={cardNameI18n(card)}>
 		<span class="strip" aria-hidden="true">
 			<span class="strip-rank">{rankLabel(card.rank)}</span>
 		</span>
@@ -45,7 +46,7 @@
 	<button
 		type="button"
 		data-card={card.rank * 4 + card.suit}
-		aria-label={cardName(card)}
+		aria-label={cardNameI18n(card)}
 		aria-pressed={selected}
 		{disabled}
 		onclick={() => onselect?.()}

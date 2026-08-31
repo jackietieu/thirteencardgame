@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Card as EngineCard } from '@thirteen/engine';
 	import { cardKey } from '$lib/highlight';
+	import { t } from '$lib/i18n.svelte';
 	import { arcFor } from '$lib/ui';
 	import Card from './Card.svelte';
 
@@ -59,7 +60,7 @@
 	}
 </script>
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions — roving arrow-key focus across card buttons -->
-<div data-hand bind:this={wrapEl} onkeydown={onKeydown} role="group" aria-label="Your cards">
+<div data-hand bind:this={wrapEl} onkeydown={onKeydown} role="group" aria-label={t('hand.aria')}>
 	{#each rows as row, r (r)}
 		<div class="fan-row">
 			{#each row as card, i (cardKey(card))}

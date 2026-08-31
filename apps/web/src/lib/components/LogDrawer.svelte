@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { describeMove } from '@thirteen/engine';
 	import type { LogEntry } from '$lib/driver';
+	import { describeMoveI18n, t } from '$lib/i18n.svelte';
 	import Card from './Card.svelte';
 
 	interface Props {
@@ -17,7 +17,7 @@
 </script>
 
 <details data-testid="log-drawer" bind:open class="log-drawer">
-	<summary class="icon-btn" aria-label="Move log" title="Move log">
+	<summary class="icon-btn" aria-label={t('log.aria')} title={t('log.aria')}>
 		<svg viewBox="0 0 24 24" class="size-5" aria-hidden="true"
 			><path
 				d="M4 6h16M4 12h16M4 18h10"
@@ -30,11 +30,11 @@
 		<span class="log-count">{log.length}</span>
 	</summary>
 	<div class="log-panel">
-		<div class="log-head">Move log</div>
+		<div class="log-head">{t('log.title')}</div>
 		<ol>
 			{#each entries as entry, i (log.length - i)}
 				<li>
-					<span class="log-hand">H{entry.handNumber + 1}</span>
+					<span class="log-hand">{t('log.hand', { n: entry.handNumber + 1 })}</span>
 					<span class="log-name">{names[entry.seat]}</span>
 					{#if entry.action.type !== 'pass'}
 						<span class="log-cards">
@@ -43,10 +43,10 @@
 							{/each}
 						</span>
 					{/if}
-					<span class="log-move">{describeMove(entry.action)}</span>
+					<span class="log-move">{describeMoveI18n(entry.action)}</span>
 				</li>
 			{:else}
-				<li class="log-empty">No moves yet.</li>
+				<li class="log-empty">{t('log.empty')}</li>
 			{/each}
 		</ol>
 	</div>

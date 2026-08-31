@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { t } from '$lib/i18n.svelte';
+
 	interface Props {
 		canPlay: boolean;
 		canPass: boolean;
@@ -28,7 +30,7 @@
 			onclick={onPlay}
 			class="btn-primary"
 		>
-			Play <kbd>↵</kbd>
+			{t('action.play')} <kbd>↵</kbd>
 		</button>
 		<button
 			type="button"
@@ -37,7 +39,7 @@
 			onclick={onPass}
 			class="btn-ghost"
 		>
-			Pass <kbd>P</kbd>
+			{t('action.pass')} <kbd>P</kbd>
 		</button>
 	</div>
 
@@ -55,7 +57,7 @@
 		onclick={() => onToggleAutoPass(!autoPass)}
 	>
 		<span class="switch" aria-checked={autoPass} aria-hidden="true"></span>
-		<span>Auto-pass when stuck</span>
+		<span>{t('action.autoPass')}</span>
 	</button>
 </div>
 

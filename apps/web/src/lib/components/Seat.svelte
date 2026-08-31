@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n.svelte';
 	import Avatar from './Avatar.svelte';
 	import CardBack from './CardBack.svelte';
 
@@ -23,13 +24,13 @@
 		<div class="pod-info">
 			<span class="pod-name">{name}</span>
 			<span class="pod-meta">
-				<span class="pod-count">{cardCount} card{cardCount === 1 ? '' : 's'}</span>
+				<span class="pod-count">{t(cardCount === 1 ? 'seat.cardCount.one' : 'seat.cardCount', { n: cardCount })}</span>
 				{#if out}
-					<span class="chip chip-out">OUT</span>
+					<span class="chip chip-out">{t('seat.out')}</span>
 				{:else if passed}
-					<span class="chip chip-pass">PASSED</span>
+					<span class="chip chip-pass">{t('seat.passed')}</span>
 				{:else if isTurn}
-					<span class="chip chip-think pulse-dot">Thinking…</span>
+					<span class="chip chip-think pulse-dot">{t('seat.thinking')}</span>
 				{/if}
 			</span>
 		</div>

@@ -268,7 +268,7 @@ class OnlineGameStore implements GameDriver {
 					return;
 				}
 				if (msg.code === 'chat_blocked') {
-					this.chatNotice = 'Message blocked by moderation';
+					this.chatNotice = 'chat_blocked';
 					return;
 				}
 				if (msg.code !== 'not_joined') {

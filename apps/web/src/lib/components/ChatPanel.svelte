@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n.svelte';
 	import { online } from '$lib/online.svelte';
 
 	let open = $state(false);
@@ -31,7 +32,7 @@
 </script>
 
 <details data-testid="chat-drawer" bind:open class="chat-drawer">
-	<summary class="icon-btn" aria-label="Chat" title="Chat">
+	<summary class="icon-btn" aria-label={t('chat.aria')} title={t('chat.aria')}>
 		<svg viewBox="0 0 24 24" class="size-5" aria-hidden="true"
 			><path
 				d="M21 11.5a8.4 8.4 0 0 1-8.4 8.3 8.8 8.8 0 0 1-3.3-.6L4 20.3l1.1-4.1a8 8 0 0 1-1.2-4.7A8.4 8.4 0 0 1 12.6 3.2a8.4 8.4 0 0 1 8.4 8.3z"
@@ -47,7 +48,7 @@
 		{/if}
 	</summary>
 	<div class="chat-panel">
-		<div class="chat-head">Room chat</div>
+		<div class="chat-head">{t('chat.title')}</div>
 		<ol bind:this={listEl}>
 			{#each online.chat as m, i (i)}
 				<li class:mine={m.seat === 0}>
@@ -55,11 +56,11 @@
 					<span class="chat-text">{m.text}</span>
 				</li>
 			{:else}
-				<li class="chat-empty">No messages yet. Say hi!</li>
+				<li class="chat-empty">{t('chat.empty')}</li>
 			{/each}
 		</ol>
-		{#if online.chatNotice}
-			<p class="chat-notice" role="alert">{online.chatNotice}</p>
+			{#if online.chatNotice}
+				<p class="chat-notice" role="alert">{online.chatNotice === 'chat_blocked' ? t('chat.blocked') : online.chatNotice}</p>
 		{/if}
 		<form
 			class="chat-form"
@@ -72,11 +73,11 @@
 				data-testid="chat-input"
 				bind:value={draft}
 				maxlength="280"
-				placeholder="Message the room…"
-				aria-label="Chat message"
+				placeholder={t('chat.placeholder')}
+				aria-label={t('chat.message.aria')}
 			/>
 			<button type="submit" class="btn-ghost btn-sm" disabled={draft.trim().length === 0}>
-				Send
+				{t('chat.send')}
 			</button>
 		</form>
 	</div>

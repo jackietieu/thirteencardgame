@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { describeMove, type Card, type Trick } from '@thirteen/engine';
+	import type { Card, Trick } from '@thirteen/engine';
+	import { describeMoveI18n, displayName, t } from '$lib/i18n.svelte';
 	import CardView from './Card.svelte';
 
 	interface Props {
@@ -80,8 +81,14 @@
 		<div class="play-pos" style="z-index: 40">
 			<div class="play-group sweep-{sweep.seat}">
 				<div class="group-cards">
-					{#each sweep.cards as card (card.rank * 4 + card.suit)}
-						<CardView {card} size="table" />
+					{#each sweep.cards as card, ci (card.rank * 4 + card.suit)}
+						{@const d = ci - (sweep.cards.length - 1) / 2}
+						<span
+							class="fan-card"
+							style="--fan-rot: {(d * 5).toFixed(2)}deg; --fan-y: {(d * d * 3).toFixed(1)}px; --fan-z: {ci + 1}"
+						>
+							<CardView {card} size="table" />
+						</span>
 					{/each}
 				</div>
 			</div>
@@ -93,13 +100,14 @@
 		{:else if trick.plays.length === 0}
 			<div class="empty-state">
 			<p class="lead-line">
-				{lastTrick ? 'New trick' : 'Opening lead'} — {names[trick.leader]} leads
+				{lastTrick ? t('pile.newTrick') : t('pile.opening')} —
+				{t('pile.leads', { name: displayName(names[trick.leader]) })}
 			</p>
 			{#if lastTrick && lastTrick.plays.length > 0}
 				{@const winner = lastTrick.leader}
 				{@const winnerPlay = [...lastTrick.plays].reverse().find((p) => p.action.type !== 'pass')}
 				<div data-testid="last-trick" class="last-trick">
-					<span class="last-line">Last trick — {names[winner]} won with {winnerPlay ? describeMove(winnerPlay.action) : 'pass'}</span>
+					<span class="last-line">{t('pile.lastTrick', { name: displayName(names[winner]), move: winnerPlay ? describeMoveI18n(winnerPlay.action) : t('move.pass') })}</span>
 					<div class="last-cards">
 						{#each playedCards(lastTrick) as card (card.rank * 4 + card.suit)}
 							<CardView {card} size="mini" />
@@ -125,12 +133,18 @@
 				>
 					<span class="group-name {winning ? 'name-win' : 'ghost'}">{names[play.seat]}</span>
 					<div class="group-cards {winning ? 'ring-win' : ''}">
-						{#each play.action.cards as card (card.rank * 4 + card.suit)}
-							<CardView {card} size="table" />
+						{#each play.action.cards as card, ci (card.rank * 4 + card.suit)}
+							{@const d = ci - (play.action.cards.length - 1) / 2}
+							<span
+								class="fan-card"
+								style="--fan-rot: {(d * 5).toFixed(2)}deg; --fan-y: {(d * d * 3).toFixed(1)}px; --fan-z: {ci + 1}"
+							>
+								<CardView {card} size="table" />
+							</span>
 						{/each}
 					</div>
 					<span class="group-caption {winning ? '' : 'ghost'}"
-						>{winning ? describeMove(play.action) : ''}</span
+						>{winning ? describeMoveI18n(play.action) : ''}</span
 					>
 				</div>
 			</div>
@@ -138,7 +152,7 @@
 		{#if passes.length > 0}
 			<div class="pass-row">
 				{#each passes as play (play.seat)}
-					<span class="pass-chip enter-{play.seat}">{names[play.seat]} passed</span>
+					<span class="pass-chip enter-{play.seat}">{t('pile.passed', { name: displayName(names[play.seat]) })}</span>
 				{/each}
 			</div>
 		{/if}
@@ -186,18 +200,21 @@
 	.last-cards :global(.card-mini + .card-mini) {
 		margin-left: -0.75rem;
 	}
-
-	.play-group {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.3rem;
-	}
 	.group-cards {
 		display: flex;
+		align-items: flex-end;
 		border-radius: 0.6rem;
 	}
-	.group-cards :global(.card-face + .card-face) {
+	/* Each played card pivots around a point below the group: the combination
+	   reads as a held fan laid down by its owner, not a straight strip. */
+	.fan-card {
+		position: relative;
+		display: inline-flex;
+		transform: rotate(var(--fan-rot, 0deg)) translateY(var(--fan-y, 0px));
+		transform-origin: 50% 115%;
+		z-index: var(--fan-z, 1);
+	}
+	.fan-card + .fan-card {
 		/* Fixed card-width overlap: %-margins against a shrink-to-fit flex
 		   container are circular and leave dead space inside the win ring. */
 		margin-left: calc(var(--table-card-w) * -0.3);

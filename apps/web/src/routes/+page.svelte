@@ -2,7 +2,10 @@
 	import type { Card } from '@thirteen/engine';
 	import { game } from '$lib/game.svelte';
 	import { getName } from '$lib/name';
+	import { t } from '$lib/i18n.svelte';
 	import CardView from '$lib/components/Card.svelte';
+	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
+	import GitHubLink from '$lib/components/GitHubLink.svelte';
 
 	// Fresh deal on click, matching the in-game "New game" button. Without a
 	// saved name yet, /play's name gate starts the game after collecting it.
@@ -19,10 +22,11 @@
 </script>
 
 <svelte:head>
-	<title>Thirteen — Tiến Lên</title>
+	<title>{t('title.home')}</title>
 </svelte:head>
 
 <main class="hero">
+	<div class="github-corner"><GitHubLink /></div>
 	<div class="hero-fan" aria-hidden="true">
 		{#each HERO_CARDS as card, i (card.rank * 4 + card.suit)}
 			<span
@@ -34,13 +38,14 @@
 		{/each}
 	</div>
 	<h1>Thirteen</h1>
-	<p class="hero-sub">Tiến Lên — 13 cards, you against three bots.</p>
+	<p class="hero-sub">{t('home.tagline')}</p>
 	<div class="hero-ctas">
-		<a href="/play" class="btn-primary" onclick={newGame}>New game vs bots</a>
-		<a href="/online" class="btn-ghost">Play online</a>
-		<a href="/rules" class="nav-link">Rules</a>
+	<a href="/play" class="btn-primary" onclick={newGame}>{t('home.cta.bots')}</a>
+	<a href="/online" class="btn-ghost">{t('home.cta.online')}</a>
+	<a href="/rules" class="nav-link">{t('nav.rules')}</a>
+	<LanguagePicker />
 	</div>
-</main>
+	</main>
 
 <style>
 	.hero {
@@ -99,5 +104,10 @@
 		gap: 0.75rem;
 		flex-wrap: wrap;
 		justify-content: center;
+	}
+	.github-corner {
+		position: absolute;
+		top: 1.25rem;
+		right: 1.25rem;
 	}
 </style>
